@@ -12,7 +12,7 @@ using UnityEditor;
 using UnityEngine.Events;
 using UnityEngine.Networking;
 
-public class Game : MonoBehaviour
+public partial class Game : MonoBehaviour
 {
     public new Camera camera;
     public GameObject contentParent;
@@ -62,8 +62,6 @@ public class Game : MonoBehaviour
     public bool EditorImmediatelyComplete;
     public float EditorCompletionDelay;
     public bool EditorImmediatelyCompleteFail;
-
-    public bool UseInstantPauseResume;
 
     public AudioManager.Controller Music { get; protected set; }
     private IGameContentProvider contentProvider;
@@ -326,15 +324,6 @@ public class Game : MonoBehaviour
             GameBridge.HideHandoffOverlay();
         }
 
-#if UNITY_STANDALONE_WIN
-        // In the Windows PC player, inject the debug HUD for seek/play/pause/fullscreen.
-        if (!GameEmbedMode.IsBridgeEmbedded)
-        {
-            var hudGo = new GameObject("CytoidPlayerHud");
-            hudGo.AddComponent<CytoidPlayerHudController>();
-        }
-#endif
-
         levelInfoParent.transform.RebuildLayout();
 
         if (startAutomatically)
@@ -517,103 +506,6 @@ public class Game : MonoBehaviour
             Pause();
         }
     }
-
-    #region Cytoid Player
-
-    public virtual void Seek(float targetTime)
-    {
-        if (!IsLoaded || State == null || State.IsCompleted || State.IsFailed) return;
-
-        targetTime = Mathf.Clamp(targetTime, 0, MusicLength);
-        var wasPlaying = State.IsPlaying;
-
-        // Pause the game loop while we reset state.
-        State.IsPlaying = false;
-        AudioListener.pause = true;
-
-        // Restart music from the target position so the audio sample clock and the
-        // chart timeline agree. Setting AudioSource.time on a playing clip is not
-        // sample-accurate and leaves the audio slightly ahead/behind the chart.
-        Music.Stop();
-        Music.PlaybackTime = targetTime;
-
-        // Rebuild the DSP reference. Chart/music offsets are applied inside
-        // SynchronizeMusic, so they must not be baked into MusicStartedTimestamp.
-        var nowDspTime = AudioSettings.dspTime;
-        MusicStartedTimestamp = nowDspTime - targetTime;
-
-        Time = targetTime;
-        MusicProgress = Time / MusicLength;
-        ChartProgress = Time / ChartLength;
-
-        // Reset chart indices to the new time.
-        ResetChartIndicesToTime(targetTime);
-
-        // Despawn all active notes and drag lines so they can be re-spawned from the new time.
-        ClearSpawnedObjects();
-
-        if (State != null)
-        {
-            State.IsCompleted = false;
-            State.IsFailed = false;
-        }
-
-        ResynchronizeChartOnNextFrame = true;
-        ticksBeforeSynchronization = 600;
-
-        // Restart playback so the audio source is actually running from the seeked time.
-        Music.Play(AudioTrackIndex.Reserved1);
-        if (wasPlaying)
-        {
-            GameStartedOrResumedTimestamp = UnityEngine.Time.realtimeSinceStartup;
-            AudioListener.pause = false;
-            State.IsPlaying = true;
-        }
-
-        onGameUpdate.Invoke(this);
-        onGameLateUpdate.Invoke(this);
-    }
-
-    private void ResetChartIndicesToTime(float targetTime)
-    {
-        Chart.CurrentEventId = 0;
-        while (Chart.CurrentEventId < Chart.Model.event_order_list.Count &&
-               Chart.Model.event_order_list[Chart.CurrentEventId].time < targetTime)
-        {
-            Chart.CurrentEventId++;
-        }
-
-        Chart.CurrentPageId = 0;
-        while (Chart.CurrentPageId < Chart.Model.page_list.Count &&
-               Chart.Model.page_list[Chart.CurrentPageId].end_time <= targetTime)
-        {
-            Chart.CurrentPageId++;
-        }
-
-        var notes = Chart.Model.note_map;
-        Chart.CurrentNoteId = 0;
-        while (Chart.CurrentNoteId < notes.Count && notes[Chart.CurrentNoteId].intro_time - 1f < targetTime)
-        {
-            Chart.CurrentNoteId++;
-        }
-    }
-
-    private void ClearSpawnedObjects()
-    {
-        var notesToClear = new List<Note>(ObjectPool.SpawnedNotes.Values);
-        foreach (var note in notesToClear)
-        {
-            if (note != null && !note.IsCollected) note.Collect();
-        }
-
-        var dragLinesToClear = new List<DragLineElement>(ObjectPool.SpawnedDragLines.Values);
-        foreach (var dragLine in dragLinesToClear)
-        {
-            if (dragLine != null) ObjectPool.CollectDragLine(dragLine);
-        }
-    }
-
-    #endregion
 
     public virtual bool Pause()
     {

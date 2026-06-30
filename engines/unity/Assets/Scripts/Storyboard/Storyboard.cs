@@ -15,7 +15,7 @@ using UnityEngine;
 
 namespace Cytoid.Storyboard
 {
-    public class Storyboard
+    public partial class Storyboard
     {
         public Game Game { get; }
         public StoryboardRenderer Renderer { get; }

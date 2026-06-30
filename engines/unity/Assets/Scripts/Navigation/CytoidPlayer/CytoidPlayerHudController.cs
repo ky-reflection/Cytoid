@@ -8,7 +8,10 @@ using UnityEngine.UI;
 public class CytoidPlayerHudController : MonoBehaviour
 {
     public const float UiSpacing = 8f;
-    public const float ButtonHeight = 40f;
+    public const float ButtonHeight = 48f;
+    public static float HudBandHeight => CytoidPlayerShell.HudBandHeightPx;
+
+    private static float ScaledHudBandHeightPx => CytoidPlayerShell.GetHudBandHeightPx();
 
     private Font uiFont;
     private Canvas canvas;
@@ -24,6 +27,7 @@ public class CytoidPlayerHudController : MonoBehaviour
     private Transform topBar;
     private Transform bottomBar;
     private bool isDraggingSlider;
+    private bool isResyncing;
     private bool wasPlayingBeforeDrag;
     private float hudVisibility;
 
@@ -128,16 +132,18 @@ public class CytoidPlayerHudController : MonoBehaviour
         if (topBar == null || bottomBar == null) return;
 
         var mouseY = Input.mousePosition.y;
-        var nearTop = mouseY >= UnityEngine.Screen.height - HudEdgeSize;
-        var nearBottom = mouseY <= HudEdgeSize;
+        var bandPx = ScaledHudBandHeightPx;
+        var edgeSize = HudEdgeSize * UnityEngine.Screen.height / Mathf.Max(1, CytoidPlayerShell.WindowHeight);
+        var nearTop = mouseY >= UnityEngine.Screen.height - edgeSize;
+        var nearBottom = mouseY <= edgeSize;
         var wantVisible = nearTop || nearBottom || isDraggingSlider;
         hudVisibility = Mathf.MoveTowards(hudVisibility, wantVisible ? 1f : 0f, Time.unscaledDeltaTime * HudAnimationSpeed);
 
         var topRect = topBar.GetComponent<RectTransform>();
-        topRect.anchoredPosition = new Vector2(0, ButtonHeight * (1 - hudVisibility));
+        topRect.anchoredPosition = new Vector2(0, bandPx * (1 - hudVisibility));
 
         var bottomRect = bottomBar.GetComponent<RectTransform>();
-        bottomRect.anchoredPosition = new Vector2(0, -ButtonHeight * (1 - hudVisibility));
+        bottomRect.anchoredPosition = new Vector2(0, -bandPx * (1 - hudVisibility));
     }
 
     private void OnGameLoaded()
@@ -188,7 +194,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         canvas.sortingOrder = 100;
         var scaler = go.AddComponent<CanvasScaler>();
         if (scaler == null) throw new InvalidOperationException("Failed to add CanvasScaler component.");
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        CytoidPlayerShell.ConfigureCanvasScaler(scaler);
         if (go.AddComponent<GraphicRaycaster>() == null) throw new InvalidOperationException("Failed to add GraphicRaycaster component.");
 
         if (FindObjectOfType<EventSystem>() == null)
@@ -205,13 +211,16 @@ public class CytoidPlayerHudController : MonoBehaviour
         rootRect.offsetMin = Vector2.zero;
         rootRect.offsetMax = Vector2.zero;
 
+        CreateHudChromeBand(root, true);
+        CreateHudChromeBand(root, false);
+
         // Top bar
         topBar = CreateUiObject("TopBar", root).transform;
         var topRect = topBar.GetComponent<RectTransform>();
         topRect.anchorMin = new Vector2(0, 1);
         topRect.anchorMax = Vector2.one;
         topRect.pivot = new Vector2(0.5f, 1);
-        topRect.sizeDelta = new Vector2(0, ButtonHeight);
+        topRect.sizeDelta = new Vector2(0, HudBandHeight);
         var topImage = topBar.gameObject.AddComponent<Image>();
         topImage.color = new Color(0, 0, 0, 0.5f);
         var topHlg = topBar.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -224,6 +233,9 @@ public class CytoidPlayerHudController : MonoBehaviour
 
         var backButton = CreateButton(topBar, "Back", () => game?.Abort());
         backButton.GetComponent<LayoutElement>().preferredWidth = 70;
+
+        var resetButton = CreateButton(topBar, "Reset", () => ResetPlayfield().Forget());
+        resetButton.GetComponent<LayoutElement>().preferredWidth = 70;
 
         playPauseButton = CreateButton(topBar, "Pause", () => TogglePause());
         playPauseButton.GetComponent<LayoutElement>().preferredWidth = 70;
@@ -262,7 +274,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         bottomRect.anchorMin = Vector2.zero;
         bottomRect.anchorMax = new Vector2(1, 0);
         bottomRect.pivot = new Vector2(0.5f, 0);
-        bottomRect.sizeDelta = new Vector2(0, ButtonHeight);
+        bottomRect.sizeDelta = new Vector2(0, HudBandHeight);
         var bottomImage = bottomBar.gameObject.AddComponent<Image>();
         bottomImage.color = new Color(0, 0, 0, 0.5f);
         var bottomHlg = bottomBar.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -329,6 +341,33 @@ public class CytoidPlayerHudController : MonoBehaviour
         sliderEvents.triggers.Add(endDrag);
     }
 
+    private void CreateHudChromeBand(Transform parent, bool top)
+    {
+        var band = CreateUiObject(top ? "TopChrome" : "BottomChrome", parent).transform;
+        var rect = band.GetComponent<RectTransform>();
+        var bandPx = HudBandHeight;
+        if (top)
+        {
+            rect.anchorMin = new Vector2(0, 1);
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(0.5f, 1);
+            rect.sizeDelta = new Vector2(0, bandPx);
+            rect.anchoredPosition = Vector2.zero;
+        }
+        else
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = new Vector2(1, 0);
+            rect.pivot = new Vector2(0.5f, 0);
+            rect.sizeDelta = new Vector2(0, bandPx);
+            rect.anchoredPosition = Vector2.zero;
+        }
+
+        var image = band.gameObject.AddComponent<Image>();
+        image.color = new Color(0.02f, 0.02f, 0.04f, 1f);
+        image.raycastTarget = false;
+    }
+
     private Text CreateText(Transform parent, string content, int fontSize, TextAnchor anchor)
     {
         var go = CreateUiObject("Text", parent);
@@ -374,15 +413,15 @@ public class CytoidPlayerHudController : MonoBehaviour
 
     private void OnSliderValueChanged(float value)
     {
-        if (!isDraggingSlider || game == null || !game.IsLoaded) return;
+        if (!isDraggingSlider || game == null || !game.IsLoaded || isResyncing) return;
 
         var targetTime = value * game.MusicLength;
-        game.Seek(targetTime);
+        game.PreviewTimeline(targetTime);
     }
 
     private void OnSliderBeginDrag()
     {
-        if (game == null || !game.IsLoaded) return;
+        if (game == null || !game.IsLoaded || isResyncing) return;
         isDraggingSlider = true;
         wasPlayingBeforeDrag = game.State.IsPlaying;
         if (game.State.IsPlaying)
@@ -391,12 +430,65 @@ public class CytoidPlayerHudController : MonoBehaviour
         }
     }
 
-    private void OnSliderEndDrag()
+    private async UniTask OnSliderEndDragAsync()
     {
         isDraggingSlider = false;
-        if (wasPlayingBeforeDrag && game != null && game.IsLoaded && !game.State.IsPlaying)
+        if (game == null || !game.IsLoaded) return;
+
+        isResyncing = true;
+        try
         {
-            game.WillUnpause();
+            var targetTime = timeSlider != null ? timeSlider.value * game.MusicLength : 0f;
+            await game.ResyncPlayfieldToTime(targetTime, wasPlayingBeforeDrag);
+            if (wasPlayingBeforeDrag && game.IsLoaded && !game.State.IsPlaying)
+            {
+                game.WillUnpause();
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[CytoidPlayer] Timeline resync failed: {e}");
+            SetStatus("Resync failed.");
+        }
+        finally
+        {
+            isResyncing = false;
+        }
+    }
+
+    private void OnSliderEndDrag()
+    {
+        OnSliderEndDragAsync().Forget();
+    }
+
+    private async UniTask ResetPlayfield()
+    {
+        if (game == null || !game.IsLoaded || isResyncing) return;
+
+        if (game.State.IsPlaying)
+        {
+            game.Pause();
+        }
+
+        if (timeSlider != null)
+        {
+            timeSlider.SetValueWithoutNotify(0);
+        }
+
+        isResyncing = true;
+        try
+        {
+            await game.ResyncPlayfieldToTime(0, false);
+            SetStatus("Reset to start.");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[CytoidPlayer] Reset failed: {e}");
+            SetStatus("Reset failed.");
+        }
+        finally
+        {
+            isResyncing = false;
         }
     }
 
@@ -527,7 +619,7 @@ public class CytoidPlayerHudController : MonoBehaviour
 
     private void ExitFullscreen()
     {
-        UnityEngine.Screen.SetResolution(1280, 720, FullScreenMode.Windowed);
+        CytoidPlayerShell.RestoreWindowedSize();
         UpdateFullscreenButtonLabel();
     }
 

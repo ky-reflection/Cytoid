@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public sealed class GameState
+public sealed partial class GameState
 {
     public GameMode Mode { get; }
 

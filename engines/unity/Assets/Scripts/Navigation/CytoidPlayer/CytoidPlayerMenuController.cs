@@ -14,13 +14,25 @@ public class CytoidPlayerMenuController : MonoBehaviour
     public const float UiSpacing = 12f;
     public const float ButtonHeight = 48f;
     public const float LevelButtonHeight = 40f;
+    public const int TitleFontSize = 38;
+    public const int HintFontSize = 20;
+    public const int StatusFontSize = 18;
+    public const int SectionFontSize = 24;
+    public const int LevelRowFontSize = 17;
+    public const int ButtonFontSize = 20;
+    public const float LevelRowHeight = 80f;
+
+    private static readonly Difficulty[] DifficultyOptions = {Difficulty.Easy, Difficulty.Hard, Difficulty.Extreme};
+    private static readonly Color DifficultyAvailableColor = new Color(0.25f, 0.35f, 0.55f);
+    private static readonly Color DifficultySelectedColor = new Color(0.3f, 0.6f, 1f);
+    private static readonly Color DifficultyUnavailableColor = new Color(0.22f, 0.22f, 0.25f);
 
     private Font uiFont;
     private Canvas canvas;
     private Transform root;
     private Text statusText;
     private Transform levelListRoot;
-    private readonly List<Button> difficultyButtons = new List<Button>();
+    private readonly Dictionary<Difficulty, Button> difficultyButtonMap = new Dictionary<Difficulty, Button>();
     private bool isRefreshingLevelList;
 
     private Level selectedLevel;
@@ -60,6 +72,8 @@ public class CytoidPlayerMenuController : MonoBehaviour
 
         SetStatus("Initializing...");
         await UniTask.WaitUntil(() => Context.IsInitialized);
+        Context.Player.Settings.HitSound = "none";
+        Context.Player.Settings.RestrictPlayAreaAspectRatio = true;
         ShowGameErrorIfAny();
         await RefreshLevelList();
         ProcessCommandLineImport();
@@ -81,10 +95,7 @@ public class CytoidPlayerMenuController : MonoBehaviour
         canvas.sortingOrder = 100;
         var scaler = go.AddComponent<CanvasScaler>();
         if (scaler == null) throw new InvalidOperationException("Failed to add CanvasScaler component.");
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
+        CytoidPlayerShell.ConfigureCanvasScaler(scaler);
         if (go.AddComponent<GraphicRaycaster>() == null) throw new InvalidOperationException("Failed to add GraphicRaycaster component.");
 
         if (FindObjectOfType<EventSystem>() == null)
@@ -119,22 +130,22 @@ public class CytoidPlayerMenuController : MonoBehaviour
         vlg.childForceExpandWidth = false;
         vlg.childForceExpandHeight = false;
 
-        var title = CreateText(root, "Cytoid Player", 32, TextAnchor.MiddleCenter);
-        title.GetComponent<LayoutElement>().preferredHeight = 60;
+        var title = CreateText(root, "Cytoid Player", TitleFontSize, TextAnchor.MiddleCenter);
+        title.GetComponent<LayoutElement>().preferredHeight = 64;
 
-        var hintText = CreateText(root, "Select a level below or use Import to load a .cytoidlevel file.\nF11 = fullscreen, ESC = back/exit fullscreen.", 18,
+        var hintText = CreateText(root, "Select a level below or use Import to load a .cytoidlevel file.\nF11 = fullscreen, ESC = back/exit fullscreen.", HintFontSize,
             TextAnchor.MiddleCenter);
-        hintText.GetComponent<LayoutElement>().preferredHeight = 48;
+        hintText.GetComponent<LayoutElement>().preferredHeight = 52;
 
         var importButton = CreateButton(root, "Import .cytoidlevel file", () => ImportLevelFile().Forget());
         importButton.GetComponent<LayoutElement>().preferredHeight = ButtonHeight;
 
-        statusText = CreateText(root, "", 16, TextAnchor.MiddleLeft);
+        statusText = CreateText(root, "", StatusFontSize, TextAnchor.MiddleLeft);
         statusText.color = new Color(1, 0.8f, 0.4f);
-        statusText.GetComponent<LayoutElement>().preferredHeight = 28;
+        statusText.GetComponent<LayoutElement>().preferredHeight = 32;
 
-        var listTitle = CreateText(root, "Installed Levels", 20, TextAnchor.MiddleLeft);
-        listTitle.GetComponent<LayoutElement>().preferredHeight = 32;
+        var listTitle = CreateText(root, "Installed Levels", SectionFontSize, TextAnchor.MiddleLeft);
+        listTitle.GetComponent<LayoutElement>().preferredHeight = 36;
 
         var scroll = CreateUiObject("LevelScroll", root);
         var scrollLe = scroll.AddComponent<LayoutElement>();
@@ -189,8 +200,8 @@ public class CytoidPlayerMenuController : MonoBehaviour
         scrollComp.vertical = true;
         scrollComp.horizontal = false;
 
-        var diffTitle = CreateText(root, "Difficulty", 20, TextAnchor.MiddleLeft);
-        diffTitle.GetComponent<LayoutElement>().preferredHeight = 32;
+        var diffTitle = CreateText(root, "Difficulty", SectionFontSize, TextAnchor.MiddleLeft);
+        diffTitle.GetComponent<LayoutElement>().preferredHeight = 36;
 
         var diffRoot = CreateUiObject("DifficultyRoot", root).transform;
         var diffHlg = diffRoot.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -200,11 +211,12 @@ public class CytoidPlayerMenuController : MonoBehaviour
         diffHlg.childControlHeight = true;
         diffHlg.childForceExpandHeight = false;
 
-        foreach (var diff in new[] {Difficulty.Easy, Difficulty.Hard, Difficulty.Extreme})
+        foreach (var diff in DifficultyOptions)
         {
-            var diffButton = CreateButton(diffRoot, diff.Id, () => SelectDifficulty(diff));
+            var captured = diff;
+            var diffButton = CreateButton(diffRoot, diff.Id, () => SelectDifficulty(captured));
             diffButton.GetComponent<LayoutElement>().preferredHeight = ButtonHeight;
-            difficultyButtons.Add(diffButton);
+            difficultyButtonMap[diff] = diffButton;
         }
 
         var startButton = CreateButton(root, "Start Game", () => StartGame());
@@ -213,7 +225,8 @@ public class CytoidPlayerMenuController : MonoBehaviour
         startColors.normalColor = new Color(0.2f, 0.8f, 0.3f);
         startButton.colors = startColors;
 
-        SelectDifficulty(Difficulty.Hard);
+        selectedDifficulty = Difficulty.Hard;
+        UpdateDifficultyButtons();
     }
 
     private static GameObject CreateUiObject(string name, Transform parent)
@@ -265,7 +278,7 @@ public class CytoidPlayerMenuController : MonoBehaviour
         if (text == null) throw new InvalidOperationException("Failed to add Text to label.");
         text.font = uiFont;
         text.text = label;
-        text.fontSize = 18;
+        text.fontSize = ButtonFontSize;
         text.alignment = TextAnchor.MiddleCenter;
         text.color = Color.white;
 
@@ -295,15 +308,52 @@ public class CytoidPlayerMenuController : MonoBehaviour
 
     private void SelectDifficulty(Difficulty difficulty)
     {
+        if (selectedLevel != null && !LevelHasChart(selectedLevel, difficulty)) return;
+
         selectedDifficulty = difficulty;
-        foreach (var btn in difficultyButtons)
+        UpdateDifficultyButtons();
+    }
+
+    private void UpdateDifficultyButtons()
+    {
+        foreach (var pair in difficultyButtonMap)
         {
+            var diff = pair.Key;
+            var btn = pair.Value;
+            var available = selectedLevel != null && LevelHasChart(selectedLevel, diff);
+            var label = btn.GetComponentInChildren<Text>();
+            if (label != null)
+            {
+                label.text = available
+                    ? $"{diff.Id} {Difficulty.ConvertToDisplayLevel(selectedLevel.Meta.GetDifficultyLevel(diff.Id))}"
+                    : diff.Id;
+            }
+
+            btn.interactable = available;
             var colors = btn.colors;
-            var label = btn.GetComponentInChildren<Text>().text.ToLowerInvariant();
-            var selected = label == difficulty.Id.ToLowerInvariant();
-            colors.normalColor = selected ? new Color(0.3f, 0.6f, 1f) : new Color(0.25f, 0.35f, 0.55f);
+            if (!available)
+            {
+                colors.normalColor = DifficultyUnavailableColor;
+                colors.highlightedColor = DifficultyUnavailableColor;
+                colors.pressedColor = DifficultyUnavailableColor;
+                colors.disabledColor = DifficultyUnavailableColor;
+            }
+            else
+            {
+                var selected = selectedDifficulty != null && selectedDifficulty.Id == diff.Id;
+                var baseColor = selected ? DifficultySelectedColor : DifficultyAvailableColor;
+                colors.normalColor = baseColor;
+                colors.highlightedColor = new Color(baseColor.r + 0.08f, baseColor.g + 0.08f, baseColor.b + 0.08f);
+                colors.pressedColor = new Color(baseColor.r - 0.05f, baseColor.g - 0.05f, baseColor.b - 0.05f);
+            }
+
             btn.colors = colors;
         }
+    }
+
+    private static bool LevelHasChart(Level level, Difficulty difficulty)
+    {
+        return level.Meta.charts.Any(c => c.type == difficulty.Id);
     }
 
     private void SelectLevel(Level level)
@@ -318,15 +368,17 @@ public class CytoidPlayerMenuController : MonoBehaviour
             rowImage.color = isSelected ? new Color(0.2f, 0.35f, 0.55f, 1f) : new Color(0.12f, 0.12f, 0.16f, 1f);
         }
 
-        // Pick a sensible default difficulty if current is missing.
-        if (level.Meta.charts.All(c => c.type != selectedDifficulty.Id))
+        if (!LevelHasChart(level, selectedDifficulty))
         {
-            var available = level.Meta.charts.Select(c => c.type).ToList();
-            if (available.Contains(Difficulty.Hard.Id)) SelectDifficulty(Difficulty.Hard);
-            else if (available.Contains(Difficulty.Extreme.Id)) SelectDifficulty(Difficulty.Extreme);
-            else if (available.Contains(Difficulty.Easy.Id)) SelectDifficulty(Difficulty.Easy);
+            foreach (var diff in new[] {Difficulty.Hard, Difficulty.Extreme, Difficulty.Easy})
+            {
+                if (!LevelHasChart(level, diff)) continue;
+                selectedDifficulty = diff;
+                break;
+            }
         }
 
+        UpdateDifficultyButtons();
         SetStatus($"Selected: {GetLevelTitle(level)} [{selectedDifficulty.Id} {level.Meta.GetDifficultyLevel(selectedDifficulty.Id)}]");
     }
 
@@ -428,8 +480,8 @@ public class CytoidPlayerMenuController : MonoBehaviour
         var localLevel = level;
         var row = CreateUiObject("LevelRow", levelListRoot).transform;
         var rowLe = row.gameObject.AddComponent<LayoutElement>();
-        rowLe.preferredHeight = 72;
-        rowLe.minHeight = 72;
+        rowLe.preferredHeight = LevelRowHeight;
+        rowLe.minHeight = LevelRowHeight;
 
         var rowImage = row.gameObject.AddComponent<Image>();
         rowImage.color = new Color(0.12f, 0.12f, 0.16f, 1f);
@@ -448,19 +500,28 @@ public class CytoidPlayerMenuController : MonoBehaviour
         var infoLe = infoGo.AddComponent<LayoutElement>();
         infoLe.flexibleWidth = 1;
         infoLe.minWidth = 200;
-        var infoText = infoGo.AddComponent<Text>();
+        var infoHit = infoGo.AddComponent<Image>();
+        infoHit.color = Color.clear;
+        var infoButton = infoGo.AddComponent<Button>();
+        infoButton.targetGraphic = infoHit;
+        infoButton.transition = Selectable.Transition.None;
+        infoButton.onClick.AddListener(() => SelectLevel(localLevel));
+
+        var infoTextGo = CreateUiObject("Label", infoGo.transform);
+        var infoTextRect = infoTextGo.GetComponent<RectTransform>();
+        infoTextRect.anchorMin = Vector2.zero;
+        infoTextRect.anchorMax = Vector2.one;
+        infoTextRect.sizeDelta = Vector2.zero;
+        var infoText = infoTextGo.AddComponent<Text>();
         infoText.font = uiFont;
         infoText.text = $"{GetLevelTitle(level)}\n{GetLevelArtist(level)}\n{GetLevelDifficultyLine(level)}";
-        infoText.fontSize = 14;
+        infoText.fontSize = LevelRowFontSize;
         infoText.alignment = TextAnchor.MiddleLeft;
         infoText.color = Color.white;
         infoText.horizontalOverflow = HorizontalWrapMode.Wrap;
         infoText.verticalOverflow = VerticalWrapMode.Truncate;
         infoText.resizeTextForBestFit = false;
         infoText.raycastTarget = false;
-
-        var selectButton = CreateButton(row, "Select", () => SelectLevel(localLevel));
-        selectButton.GetComponent<LayoutElement>().preferredWidth = 80;
 
         var deleteButton = CreateButton(row, "Delete", () => OnDeleteLevelClicked(localLevel));
         var deleteLe = deleteButton.GetComponent<LayoutElement>();

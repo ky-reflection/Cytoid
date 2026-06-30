@@ -49,11 +49,17 @@ public class InputController : MonoBehaviour
 
     public void OnGamePaused(Game game)
     {
-        HoldingNotes.Values.ForEach(note =>
-        {
-            note.HoldingFingers.Clear();
-        });
+        ResetTouchState();
+    }
+
+    public void ResetTouchState()
+    {
+        HoldingNotes.Values.ForEach(note => note.HoldingFingers.Clear());
         HoldingNotes.Clear();
+        FlickingNotes.Clear();
+        TouchableDragNotes.Clear();
+        TouchableHoldNotes.Clear();
+        TouchableNormalNotes.Clear();
     }
 
     public void OnGameUpdate(Game game)

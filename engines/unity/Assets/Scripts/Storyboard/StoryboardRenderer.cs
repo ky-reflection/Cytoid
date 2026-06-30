@@ -15,7 +15,7 @@ using SpriteRenderer = Cytoid.Storyboard.Sprites.SpriteRenderer;
 
 namespace Cytoid.Storyboard
 {
-    public class StoryboardRenderer
+    public partial class StoryboardRenderer
     {
         public const int ReferenceWidth = 800;
         public const int ReferenceHeight = 600;

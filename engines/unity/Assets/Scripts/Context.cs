@@ -212,6 +212,12 @@ public class Context : SingletonMonoBehavior<Context>
 
         InitialWidth = UnityEngine.Screen.width;
         InitialHeight = UnityEngine.Screen.height;
+#if UNITY_STANDALONE_WIN
+        if (!GameEmbedMode.IsBridgeEmbedded)
+        {
+            CytoidPlayerShell.EnsureInitialized();
+        }
+#endif
         UpdateGraphicsQuality();
 
         SelectedMods = new HashSet<Mod>(Player.Settings.EnabledMods);
@@ -264,6 +270,7 @@ public class Context : SingletonMonoBehavior<Context>
 
 #if UNITY_STANDALONE_WIN
         // Inject the Windows PC player menu if it isn't already present in the scene.
+        CytoidPlayerShell.EnsureInitialized();
         if (UnityEngine.Object.FindObjectOfType<CytoidPlayerMenuController>() == null)
         {
             var menuGo = new GameObject("CytoidPlayerMenuController");
@@ -502,8 +509,14 @@ public class Context : SingletonMonoBehavior<Context>
     {
         var quality = Player.Settings.GraphicsQuality;
 #if UNITY_STANDALONE_WIN
-        // Cytoid Player on Windows PC runs in a resizable window.
-        // Quality only affects the default window size, not fullscreen.
+        if (!GameEmbedMode.IsBridgeEmbedded)
+        {
+            CytoidPlayerShell.ApplyGraphicsQualityIfNeeded(quality);
+            return;
+        }
+#endif
+#if UNITY_STANDALONE_WIN
+        // Legacy standalone editor / non-player builds.
         int width, height;
         switch (quality)
         {
@@ -527,14 +540,12 @@ public class Context : SingletonMonoBehavior<Context>
                 break;
         }
 
-        // Clamp to the current monitor size so the window fits on screen.
         var maxWidth = UnityEngine.Screen.currentResolution.width;
         var maxHeight = UnityEngine.Screen.currentResolution.height;
         if (width > maxWidth || height > maxHeight)
         {
             width = Mathf.Min(width, maxWidth);
             height = Mathf.Min(height, maxHeight);
-            // Preserve aspect ratio.
             var scale = Mathf.Min((float)width / 1920, (float)height / 1080);
             width = Mathf.Max(1280, Mathf.RoundToInt(1920 * scale));
             height = Mathf.Max(720, Mathf.RoundToInt(1080 * scale));

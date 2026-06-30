@@ -614,8 +614,8 @@ public static class CytoidCoreBuild
         {
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Standalone, "org.cytoid.player");
             PlayerSettings.productName = "Cytoid Player";
-            PlayerSettings.defaultScreenWidth = 1280;
-            PlayerSettings.defaultScreenHeight = 720;
+            PlayerSettings.defaultScreenWidth = CytoidPlayerShell.PlayAreaWidth;
+            PlayerSettings.defaultScreenHeight = CytoidPlayerShell.WindowHeight;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.allowFullscreenSwitch = true;
             PlayerSettings.resizableWindow = true;

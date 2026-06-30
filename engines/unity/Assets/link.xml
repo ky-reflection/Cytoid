@@ -68,6 +68,7 @@
         -->
         <type fullname="CytoidPlayerMenuController" preserve="all"/>
         <type fullname="CytoidPlayerHudController" preserve="all"/>
+        <type fullname="CytoidPlayerShell" preserve="all"/>
     </assembly>
 
     <assembly fullname="UnityEngine.UI">
