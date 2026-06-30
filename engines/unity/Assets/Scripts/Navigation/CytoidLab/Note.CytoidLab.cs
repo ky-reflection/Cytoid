@@ -1,5 +1,5 @@
 /// <summary>
-/// Synchronous despawn for Cytoid Player timeline resync (bypasses async DragHeadNote.Collect).
+/// Synchronous despawn for Cytoid Lab timeline resync (bypasses async DragHeadNote.Collect).
 /// </summary>
 public partial class Note
 {

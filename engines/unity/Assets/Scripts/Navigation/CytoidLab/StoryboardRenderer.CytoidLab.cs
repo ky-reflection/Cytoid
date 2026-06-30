@@ -15,7 +15,7 @@ using SpriteRenderer = Cytoid.Storyboard.Sprites.SpriteRenderer;
 namespace Cytoid.Storyboard
 {
     /// <summary>
-    /// Cytoid Player storyboard renderer rebuild for timeline scrubbing (partial extension).
+    /// Cytoid Lab storyboard renderer rebuild for timeline scrubbing (partial extension).
     /// </summary>
     public partial class StoryboardRenderer
     {
@@ -33,7 +33,7 @@ namespace Cytoid.Storyboard
             }
 
             SpritePathRefCount.Clear();
-            ResetCameraFilters();
+            ResetRuntimeStateForSeek();
 
             var timer = new BenchmarkTimer("StoryboardRenderer player resync");
             bool Predicate<TO>(TO obj) where TO : Object => !obj.IsManuallySpawned();

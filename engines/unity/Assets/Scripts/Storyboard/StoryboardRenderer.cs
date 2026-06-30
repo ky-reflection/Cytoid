@@ -73,6 +73,73 @@ namespace Cytoid.Storyboard
             Camera.fieldOfView = 53.2f;
         }
 
+        /// <summary>
+        /// Restores storyboard controller side effects to defaults before re-applying states at a seek target.
+        /// </summary>
+        internal void ResetRuntimeStateForSeek()
+        {
+            ResetCamera();
+            ResetCameraFilters();
+
+            var canvas = Provider.CanvasRect;
+            Constants.CanvasToWorldXMultiplier = 1.0f / canvas.width * Camera.pixelWidth;
+            Constants.CanvasToWorldYMultiplier = 1.0f / canvas.height * Camera.pixelHeight;
+            Constants.WorldToCanvasXMultiplier = 1.0f / Camera.pixelWidth * canvas.width;
+            Constants.WorldToCanvasYMultiplier = 1.0f / Camera.pixelHeight * canvas.height;
+
+            if (Provider.CanvasGroup != null) Provider.CanvasGroup.alpha = 1f;
+            if (Provider.UiCanvasGroup != null) Provider.UiCanvasGroup.alpha = 1f;
+            if (Provider.Cover != null) Provider.Cover.color = Provider.Cover.color.WithAlpha(0f);
+
+            if (Scanner.Instance != null)
+            {
+                Scanner.Instance.positionOverride = float.MinValue;
+                Scanner.Instance.opacity = 1f;
+                Scanner.Instance.colorOverride = UnityEngine.Color.clear;
+            }
+
+            if (Game?.Config != null)
+            {
+                Game.Config.GlobalNoteOpacityMultiplier = 1f;
+                Game.Config.GlobalRingColorOverride = UnityEngine.Color.clear;
+                Game.Config.UseScannerSmoothing = true;
+                foreach (NoteType type in Enum.GetValues(typeof(NoteType)))
+                {
+                    Game.Config.GlobalFillColorsOverride[type] = new[] { UnityEngine.Color.clear, UnityEngine.Color.clear };
+                }
+            }
+
+            if (Game?.Renderer != null) Game.Renderer.OpacityMultiplier = 1f;
+            if (Game?.Chart != null) Game.Chart.UseScannerSmoothing = Game.Config?.UseScannerSmoothing ?? true;
+
+            if (Game?.Chart?.Model?.note_list != null)
+            {
+                foreach (var note in Game.Chart.Model.note_list)
+                {
+                    ResetNoteOverride(note.Override);
+                }
+            }
+        }
+
+        private static void ResetNoteOverride(ChartModel.Note.NoteOverride ovr)
+        {
+            ovr.X = null;
+            ovr.Y = null;
+            ovr.Z = null;
+            ovr.RotX = null;
+            ovr.RotY = null;
+            ovr.RotZ = null;
+            ovr.XMultiplier = 1f;
+            ovr.YMultiplier = 1f;
+            ovr.XOffset = 0f;
+            ovr.YOffset = 0f;
+            ovr.RingColor = null;
+            ovr.FillColor = null;
+            ovr.OpacityMultiplier = 1f;
+            ovr.SizeMultiplier = 1f;
+            ovr.HitboxMultiplier = 1f;
+        }
+
         private void ResetCameraFilters()
         {
             if (StoryboardEffects.Current != null)

@@ -23,13 +23,8 @@ public partial class HoldNote : Note
     public override void Collect()
     {
         if (IsCollected) return;
-        
-        HoldingStartTime = float.MaxValue;
-        HeldDuration = default;
-        HoldProgress = default;
-        HoldingFingers.Clear();
-        playedHitSoundAtBegin = false;
-        ClearTimelineHoldProgress();
+
+        ResetHoldRuntimeState();
         base.Collect();
     }
 

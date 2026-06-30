@@ -1,5 +1,5 @@
 @echo off
-powershell -ExecutionPolicy Bypass -File "%~dp0build-cytoid-player.ps1" %*
+powershell -ExecutionPolicy Bypass -File "%~dp0build-cytoid-lab.ps1" %*
 if errorlevel 1 (
     echo Build failed.
     if /I not "%NOPAUSE%"=="1" pause

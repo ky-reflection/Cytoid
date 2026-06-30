@@ -4,7 +4,7 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 /// <summary>
-/// Cytoid Player timeline scrubbing and playfield resync (partial Game extension).
+/// Cytoid Lab timeline scrubbing and playfield resync (partial Game extension).
 /// </summary>
 public partial class Game
 {
@@ -23,7 +23,9 @@ public partial class Game
         Time = targetTime;
         MusicProgress = MusicLength > 0 ? Time / MusicLength : 0;
         ChartProgress = ChartLength > 0 ? Time / ChartLength : 0;
+        RefreshSpawnedHoldProgress(targetTime);
         Music.Play(AudioTrackIndex.Reserved1);
+        onGameUpdate.Invoke(this);
     }
 
     public void Seek(float targetTime)
@@ -80,7 +82,7 @@ public partial class Game
             }
             catch (Exception e)
             {
-                Debug.LogError($"[CytoidPlayer] Storyboard resync failed: {e}");
+                Debug.LogError($"[CytoidLab] Storyboard resync failed: {e}");
             }
         }
 
@@ -154,7 +156,7 @@ public partial class Game
                 default:
                     if (ObjectPool.SpawnNote(note) is HoldNote holdNote)
                     {
-                        holdNote.ApplyResyncVisualState(targetTime);
+                        holdNote.ApplyTimelineHoldProgress(targetTime);
                     }
                     break;
             }
@@ -222,6 +224,17 @@ public partial class Game
         }
 
         return note;
+    }
+
+    private void RefreshSpawnedHoldProgress(float time)
+    {
+        foreach (var note in ObjectPool.SpawnedNotes.Values)
+        {
+            if (note is HoldNote holdNote)
+            {
+                holdNote.ApplyTimelineHoldProgress(time);
+            }
+        }
     }
 
     private void ClearSpawnedObjects()

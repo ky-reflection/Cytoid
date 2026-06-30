@@ -13,6 +13,8 @@ public class FullComboSplash : CleanTitleTransitionElement
 
     public void OnGameComplete()
     {
+        if (CytoidLabShell.IsActive) return;
+
         if (game.State.Mode != GameMode.Calibration && game.State.Combo == game.State.NoteCount && game.State.Score < 1000000)
         {
             text.text = game.State.Combo + "x";

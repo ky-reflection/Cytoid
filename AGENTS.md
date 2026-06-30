@@ -22,7 +22,7 @@
 |------|------------------|----------|
 | **Standalone debug** | Default in Editor (no `CYTOID_FLUTTER_HOST`) | Navigation + Game for in-editor Play Mode |
 | **Bridge-embedded** | `CYTOID_FLUTTER_HOST` on plugin export builds | `CoreHostBootstrap` + `bridge.play.start` → Game; results via `GameBridge` / host protocol |
-| **Cytoid Player (Windows)** | `UNITY_STANDALONE_WIN` build, not Bridge-embedded | `CytoidPlayerShell` + runtime menu/HUD; same `Game` scene — code under `engines/unity/Assets/Scripts/Navigation/CytoidPlayer/` |
+| **Cytoid Lab (Windows)** | `UNITY_STANDALONE_WIN` build, not Bridge-embedded | `CytoidLabShell` + runtime menu/HUD; same `Game` scene — code under `engines/unity/Assets/Scripts/Navigation/CytoidLab/` |
 
 ### Scenes (build order)
 
@@ -222,7 +222,7 @@ If you change envelope types or payloads:
 | 2026-05 | No Unity disk persistence (LiteDB removed) | Settings/records/scores live in Flutter; core uses in-memory `LocalPlayerSettings`, `LevelRecord`, `GameLaunchSettings` |
 | 2026-05 | Lunar Console removed; `game.log` forwarding | Bridge-embedded receives Unity logs; Graphy retained for in-engine profiler overlay |
 | 2026-05 | Cytoid top-level menu = plugin builds only | Flat `Cytoid/…` items; no Core Build submenu; exports use `PluginBuildScenes` + `CYTOID_FLUTTER_HOST` |
-| 2026-06 | Cytoid Player on `feature/cytoid-player` | Windows standalone via partial-class extensions under `Navigation/CytoidPlayer/` |
+| 2026-06 | Cytoid Lab on `feature/cytoid-player` | Windows standalone chart lab via partial-class extensions under `Navigation/CytoidLab/` |
 
 Append new rows when architecture or default paths change.
 
@@ -244,6 +244,6 @@ Append new rows when architecture or default paths change.
 | Flutter plugin (iOS Swift / SPM) | `engines/unity/flutter_plugin/ios/cytoid_game_core/` |
 | Flutter Dart API | `engines/unity/flutter_plugin/lib/src/cytoid_game_core_client.dart` |
 | Protocol doc | `docs/host-protocol-v2.md` (v1 doc at engines/unity/flutter_plugin/example/docs/host-protocol.md is DEPRECATED) |
-| Cytoid Player | `engines/unity/Assets/Scripts/Navigation/CytoidPlayer/` |
-| Cytoid Player Windows build | `engines/unity/build-cytoid-player.ps1`, `CytoidCoreBuild.BuildCytoidPlayerWindows64` |
+| Cytoid Lab | `engines/unity/Assets/Scripts/Navigation/CytoidLab/`, `docs/cytoid-lab.md` |
+| Cytoid Lab Windows build | `engines/unity/build-cytoid-lab.ps1`, `CytoidCoreBuild.BuildCytoidLabWindows64` |
 | Legacy architecture notes | `engines/unity/flutter_plugin/example/docs/old-architecture/` |

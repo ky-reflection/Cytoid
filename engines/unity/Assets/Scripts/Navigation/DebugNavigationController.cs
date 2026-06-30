@@ -25,7 +25,7 @@ public class DebugNavigationController : MonoBehaviour
         }
 
 #if UNITY_STANDALONE_WIN
-        // The new Cytoid Player menu replaces the legacy debug navigation on Windows PC builds.
+        // The new Cytoid Lab menu replaces the legacy debug navigation on Windows PC builds.
         gameObject.SetActive(false);
         var legacyCanvas = GameObject.Find("Debug Navigation Canvas");
         if (legacyCanvas != null) legacyCanvas.SetActive(false);

@@ -1,7 +1,7 @@
 using System;
 
 /// <summary>
-/// Cytoid Player score/judgement rewind for timeline scrubbing (partial GameState extension).
+/// Cytoid Lab score/judgement rewind for timeline scrubbing (partial GameState extension).
 /// </summary>
 public partial class GameState
 {

@@ -61,14 +61,14 @@
     <assembly fullname="Assembly-CSharp">
         <type fullname="Cytoid.Storyboard.Vendor.VendorStoryboardEffectsBootstrap" preserve="all"/>
         <!--
-            Cytoid Player constructs its menu and in-game HUD at runtime from
+            Cytoid Lab constructs its menu and in-game HUD at runtime from
             code (AddComponent<T>). Preserve the controllers and all legacy UGUI
             types they touch so IL2CPP managed-code stripping does not silently
             remove them in standalone Windows builds.
         -->
-        <type fullname="CytoidPlayerMenuController" preserve="all"/>
-        <type fullname="CytoidPlayerHudController" preserve="all"/>
-        <type fullname="CytoidPlayerShell" preserve="all"/>
+        <type fullname="CytoidLabMenuController" preserve="all"/>
+        <type fullname="CytoidLabHudController" preserve="all"/>
+        <type fullname="CytoidLabShell" preserve="all"/>
     </assembly>
 
     <assembly fullname="UnityEngine.UI">

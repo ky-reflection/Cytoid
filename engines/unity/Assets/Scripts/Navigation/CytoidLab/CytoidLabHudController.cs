@@ -5,13 +5,13 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class CytoidPlayerHudController : MonoBehaviour
+public class CytoidLabHudController : MonoBehaviour
 {
     public const float UiSpacing = 8f;
     public const float ButtonHeight = 48f;
-    public static float HudBandHeight => CytoidPlayerShell.HudBandHeightPx;
+    public static float HudBandHeight => CytoidLabShell.HudBandHeightPx;
 
-    private static float ScaledHudBandHeightPx => CytoidPlayerShell.GetHudBandHeightPx();
+    private static float ScaledHudBandHeightPx => CytoidLabShell.GetHudBandHeightPx();
 
     private Font uiFont;
     private Canvas canvas;
@@ -20,10 +20,12 @@ public class CytoidPlayerHudController : MonoBehaviour
     private Text timeText;
     private Text levelInfoText;
     private Text statusText;
+    private Text versionText;
     private Button playPauseButton;
     private Button fullscreenButton;
     private Button autoButton;
     private Button hitSoundButton;
+    private Button noteIdsButton;
     private Transform topBar;
     private Transform bottomBar;
     private bool isDraggingSlider;
@@ -45,7 +47,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         uiFont = Resources.Load<Font>("Fonts/Nunito-Regular");
         if (uiFont == null)
         {
-            Debug.LogWarning("[CytoidPlayer] Nunito-Regular font not found; falling back to default font.");
+            Debug.LogWarning("[CytoidLab] Nunito-Regular font not found; falling back to default font.");
             uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
     }
@@ -64,7 +66,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         game = FindObjectOfType<Game>();
         if (game == null)
         {
-            Debug.LogError("[CytoidPlayerHud] No Game instance found.");
+            Debug.LogError("[CytoidLabHud] No Game instance found.");
             return;
         }
 
@@ -82,11 +84,11 @@ public class CytoidPlayerHudController : MonoBehaviour
         try
         {
             BuildHud();
-            Debug.Log("[CytoidPlayer] HUD built successfully.");
+            Debug.Log("[CytoidLab] HUD built successfully.");
         }
         catch (Exception e)
         {
-            Debug.LogError($"[CytoidPlayer] Failed to build HUD: {e}");
+            Debug.LogError($"[CytoidLab] Failed to build HUD: {e}");
         }
     }
 
@@ -133,7 +135,7 @@ public class CytoidPlayerHudController : MonoBehaviour
 
         var mouseY = Input.mousePosition.y;
         var bandPx = ScaledHudBandHeightPx;
-        var edgeSize = HudEdgeSize * UnityEngine.Screen.height / Mathf.Max(1, CytoidPlayerShell.WindowHeight);
+        var edgeSize = HudEdgeSize * UnityEngine.Screen.height / Mathf.Max(1, CytoidLabShell.WindowHeight);
         var nearTop = mouseY >= UnityEngine.Screen.height - edgeSize;
         var nearBottom = mouseY <= edgeSize;
         var wantVisible = nearTop || nearBottom || isDraggingSlider;
@@ -153,6 +155,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         UpdateLevelInfo();
         UpdateAutoButton();
         UpdateHitSoundButton();
+        UpdateNoteIdsButton();
     }
 
     private void OnGameStarted()
@@ -187,14 +190,14 @@ public class CytoidPlayerHudController : MonoBehaviour
 
     private void BuildHud()
     {
-        var go = new GameObject("CytoidPlayerHud");
+        var go = new GameObject("CytoidLabHud");
         canvas = go.AddComponent<Canvas>();
         if (canvas == null) throw new InvalidOperationException("Failed to add Canvas component.");
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
         var scaler = go.AddComponent<CanvasScaler>();
         if (scaler == null) throw new InvalidOperationException("Failed to add CanvasScaler component.");
-        CytoidPlayerShell.ConfigureCanvasScaler(scaler);
+        CytoidLabShell.ConfigureCanvasScaler(scaler);
         if (go.AddComponent<GraphicRaycaster>() == null) throw new InvalidOperationException("Failed to add GraphicRaycaster component.");
 
         if (FindObjectOfType<EventSystem>() == null)
@@ -252,6 +255,12 @@ public class CytoidPlayerHudController : MonoBehaviour
         hitSoundColors.normalColor = new Color(0.25f, 0.35f, 0.55f);
         hitSoundButton.colors = hitSoundColors;
 
+        noteIdsButton = CreateButton(topBar, "IDs", () => ToggleNoteIds());
+        noteIdsButton.GetComponent<LayoutElement>().preferredWidth = 56;
+        var noteIdsColors = noteIdsButton.colors;
+        noteIdsColors.normalColor = new Color(0.25f, 0.25f, 0.3f);
+        noteIdsButton.colors = noteIdsColors;
+
         fullscreenButton = CreateButton(topBar, "Fullscreen", () => ToggleFullscreen());
         fullscreenButton.GetComponent<LayoutElement>().preferredWidth = 90;
 
@@ -281,7 +290,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         bottomHlg.padding = new RectOffset(8, 8, 4, 4);
         bottomHlg.spacing = UiSpacing;
         bottomHlg.childControlWidth = true;
-        bottomHlg.childForceExpandWidth = true;
+        bottomHlg.childForceExpandWidth = false;
         bottomHlg.childControlHeight = true;
         bottomHlg.childForceExpandHeight = true;
 
@@ -290,6 +299,15 @@ public class CytoidPlayerHudController : MonoBehaviour
         timeSlider.minValue = 0;
         timeSlider.maxValue = 1;
         timeSlider.value = 0;
+        var sliderLayout = sliderGo.AddComponent<LayoutElement>();
+        sliderLayout.flexibleWidth = 1;
+        sliderLayout.minWidth = 200;
+
+        versionText = CreateText(bottomBar, CytoidLabVersion.DisplayName, 13, TextAnchor.MiddleRight);
+        versionText.color = new Color(1f, 1f, 1f, 0.45f);
+        var versionLayout = versionText.GetComponent<LayoutElement>();
+        versionLayout.flexibleWidth = 0;
+        versionLayout.preferredWidth = 52;
 
         var sliderBg = CreateUiObject("Background", sliderGo.transform);
         var sliderBgRect = sliderBg.GetComponent<RectTransform>();
@@ -443,7 +461,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[CytoidPlayer] Timeline resync failed: {e}");
+            Debug.LogError($"[CytoidLab] Timeline resync failed: {e}");
             SetStatus("Resync failed.");
         }
         finally
@@ -537,7 +555,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[CytoidPlayerHud] Failed to load hit sound: {e}");
+            Debug.LogError($"[CytoidLabHud] Failed to load hit sound: {e}");
         }
     }
 
@@ -551,6 +569,43 @@ public class CytoidPlayerHudController : MonoBehaviour
         var colors = hitSoundButton.colors;
         colors.normalColor = enabled ? new Color(0.3f, 0.6f, 1f) : new Color(0.25f, 0.25f, 0.3f);
         hitSoundButton.colors = colors;
+    }
+
+    private void ToggleNoteIds()
+    {
+        if (game == null || game.Config == null) return;
+
+        var enabled = !Context.Player.Settings.DisplayNoteIds;
+        Context.Player.Settings.DisplayNoteIds = enabled;
+        game.Config.DisplayNoteIds = enabled;
+        RefreshSpawnedNoteIdLabels();
+        UpdateNoteIdsButton();
+        SetStatus(enabled ? "Note IDs shown." : "Note IDs hidden.");
+    }
+
+    private void RefreshSpawnedNoteIdLabels()
+    {
+        if (game?.ObjectPool == null) return;
+
+        foreach (var note in game.ObjectPool.SpawnedNotes.Values)
+        {
+            if (note?.Renderer is ClassicNoteRenderer classicRenderer)
+            {
+                classicRenderer.OnNoteLoaded();
+            }
+        }
+    }
+
+    private void UpdateNoteIdsButton()
+    {
+        if (noteIdsButton == null) return;
+
+        var enabled = Context.Player.Settings.DisplayNoteIds;
+        var text = noteIdsButton.GetComponentInChildren<Text>();
+        if (text != null) text.text = enabled ? "IDs: On" : "IDs: Off";
+        var colors = noteIdsButton.colors;
+        colors.normalColor = enabled ? new Color(0.55f, 0.45f, 0.2f) : new Color(0.25f, 0.25f, 0.3f);
+        noteIdsButton.colors = colors;
     }
 
     private void UpdatePlayPauseLabel()
@@ -598,7 +653,7 @@ public class CytoidPlayerHudController : MonoBehaviour
 
     private void ExitFullscreen()
     {
-        CytoidPlayerShell.RestoreWindowedSize();
+        CytoidLabShell.RestoreWindowedSize();
         UpdateFullscreenButtonLabel();
     }
 

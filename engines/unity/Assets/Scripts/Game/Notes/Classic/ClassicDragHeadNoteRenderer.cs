@@ -3,11 +3,11 @@ using Object = UnityEngine.Object;
 
 public class ClassicDragHeadNoteRenderer : ClassicNoteRenderer
 {
-    public DragHeadNote DragHeadNote => (DragHeadNote) Note;
-    
+    public DragHeadNote DragHeadNote => (DragHeadNote)Note;
+
     protected SpriteMask SpriteMask;
     protected SpriteRenderer CDragFill;
-    
+
     public ClassicDragHeadNoteRenderer(DragHeadNote dragHeadNote) : base(dragHeadNote)
     {
         SpriteMask = Note.transform.GetComponentInChildren<SpriteMask>();
@@ -21,6 +21,7 @@ public class ClassicDragHeadNoteRenderer : ClassicNoteRenderer
         if (CDragFill != null) CDragFill.sortingOrder = Fill.sortingOrder + 1;
         SpriteMask.frontSortingOrder = Note.Model.id + 1;
         SpriteMask.backSortingOrder = Note.Model.id - 2;
+        BindNoteId();
     }
 
     protected override void UpdateComponentStates()
@@ -29,6 +30,7 @@ public class ClassicDragHeadNoteRenderer : ClassicNoteRenderer
         {
             SpriteMask.enabled = Game.Time >= Note.Model.intro_time;
         }
+
         if (Game.Time >= Note.Model.intro_time && (!Game.State.IsJudged(DragHeadNote.EndNoteModel.id) || Game.Time < DragHeadNote.EndNoteModel.start_time))
         {
             if (Game.State.Mods.Contains(Mod.HideNotes))
@@ -36,17 +38,14 @@ public class ClassicDragHeadNoteRenderer : ClassicNoteRenderer
                 Ring.enabled = false;
                 Fill.enabled = false;
                 if (CDragFill != null) CDragFill.enabled = false;
+                SetNoteIdVisible(false);
             }
             else
             {
                 Ring.enabled = true;
                 Fill.enabled = true;
                 if (CDragFill != null) CDragFill.enabled = true;
-                if (DisplayNoteId)
-                {
-                    NoteId.gameObject.SetActive(true);
-                    NoteId.transform.localEulerAngles = new Vector3(0, 0, -Note.transform.localEulerAngles.z);
-                }
+                SetNoteIdVisible(true);
             }
         }
         else
@@ -54,7 +53,7 @@ public class ClassicDragHeadNoteRenderer : ClassicNoteRenderer
             Ring.enabled = false;
             Fill.enabled = false;
             if (CDragFill != null) CDragFill.enabled = false;
-            if (DisplayNoteId) NoteId.gameObject.SetActive(false);
+            SetNoteIdVisible(false);
         }
     }
 
@@ -67,7 +66,7 @@ public class ClassicDragHeadNoteRenderer : ClassicNoteRenderer
         else
         {
             var size = BaseTransformSize * Note.Model.Override.SizeMultiplier;
-            
+
             var minSize = Note.Model.initial_scale;
             var timeScale = Mathf.Clamp((Game.Time - Note.Model.intro_time) / (Note.Model.start_time - Note.Model.intro_time), 0f, 1f);
             var timeScaledSize = size * minSize + size * (1 - minSize) * timeScale;

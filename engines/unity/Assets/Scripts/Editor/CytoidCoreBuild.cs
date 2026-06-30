@@ -554,9 +554,9 @@ public static class CytoidCoreBuild
         return string.Join(";", symbols);
     }
 
-    #region Cytoid Player (Windows PC)
+    #region Cytoid Lab (Windows PC)
 
-    public const string CytoidPlayerOutputRelativePath = "Builds/CytoidPlayer";
+    public const string CytoidLabOutputRelativePath = "Builds/CytoidLab";
 
     public static readonly string[] PlayerBuildScenes =
     {
@@ -567,30 +567,30 @@ public static class CytoidCoreBuild
 
     private const int MenuPriorityBuildPlayer = 20;
 
-    [MenuItem("Cytoid/Build Cytoid Player (Windows x64)", false, MenuPriorityBuildPlayer)]
-    public static void BuildCytoidPlayerMenu()
+    [MenuItem("Cytoid/Build Cytoid Lab (Windows x64)", false, MenuPriorityBuildPlayer)]
+    public static void BuildCytoidLabMenu()
     {
-        BuildCytoidPlayerWindows64();
+        BuildCytoidLabWindows64();
     }
 
     /// <summary>
-    /// Batchmode: Unity -batchmode -quit -projectPath ... -executeMethod CytoidCoreBuild.BuildCytoidPlayerWindows64
+    /// Batchmode: Unity -batchmode -quit -projectPath ... -executeMethod CytoidCoreBuild.BuildCytoidLabWindows64
     /// </summary>
-    public static void BuildCytoidPlayerWindows64()
+    public static void BuildCytoidLabWindows64()
     {
-        var outputDirectory = ResolvePathUnderProjectRoot(CytoidPlayerOutputRelativePath);
-        BuildCytoidPlayerWindows64(outputDirectory);
+        var outputDirectory = ResolvePathUnderProjectRoot(CytoidLabOutputRelativePath);
+        BuildCytoidLabWindows64(outputDirectory);
     }
 
-    public static void BuildCytoidPlayerWindows64(string outputDirectory)
+    public static void BuildCytoidLabWindows64(string outputDirectory)
     {
         SwitchToStandaloneWindows64();
         Directory.CreateDirectory(outputDirectory);
-        var executablePath = Path.Combine(outputDirectory, "CytoidPlayer.exe");
+        var executablePath = Path.Combine(outputDirectory, "CytoidLab.exe");
 
         RunAfterScriptCompilation(
             () => RunStandaloneWindows64Build(PlayerBuildScenes, executablePath),
-            "Cytoid Player Windows x64 build");
+            "Cytoid Lab Windows x64 build");
     }
 
     private static void SwitchToStandaloneWindows64()
@@ -609,13 +609,15 @@ public static class CytoidCoreBuild
         var previousFullscreenMode = PlayerSettings.fullScreenMode;
         var previousAllowFullscreenSwitch = PlayerSettings.allowFullscreenSwitch;
         var previousResizableWindow = PlayerSettings.resizableWindow;
+        var previousBundleVersion = PlayerSettings.bundleVersion;
 
         try
         {
-            PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Standalone, "org.cytoid.player");
-            PlayerSettings.productName = "Cytoid Player";
-            PlayerSettings.defaultScreenWidth = CytoidPlayerShell.PlayAreaWidth;
-            PlayerSettings.defaultScreenHeight = CytoidPlayerShell.WindowHeight;
+            PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Standalone, "org.cytoid.lab");
+            PlayerSettings.productName = "Cytoid Lab";
+            PlayerSettings.bundleVersion = CytoidLabVersion.Version;
+            PlayerSettings.defaultScreenWidth = CytoidLabShell.PlayAreaWidth;
+            PlayerSettings.defaultScreenHeight = CytoidLabShell.WindowHeight;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.allowFullscreenSwitch = true;
             PlayerSettings.resizableWindow = true;
@@ -645,11 +647,11 @@ public static class CytoidCoreBuild
             {
                 LogBuildReportErrors(report, "StandaloneWindows64");
                 throw new Exception(
-                    $"Cytoid Player Windows x64 build failed: {report.summary.result}. "
+                    $"Cytoid Lab Windows x64 build failed: {report.summary.result}. "
                     + "See Console for build step errors.");
             }
 
-            Debug.Log($"[CytoidCoreBuild] Cytoid Player built at {Path.GetFullPath(locationPathName)}");
+            Debug.Log($"[CytoidCoreBuild] Cytoid Lab {CytoidLabVersion.DisplayName} built at {Path.GetFullPath(locationPathName)}");
         }
         finally
         {
@@ -660,6 +662,7 @@ public static class CytoidCoreBuild
             PlayerSettings.fullScreenMode = previousFullscreenMode;
             PlayerSettings.allowFullscreenSwitch = previousAllowFullscreenSwitch;
             PlayerSettings.resizableWindow = previousResizableWindow;
+            PlayerSettings.bundleVersion = previousBundleVersion;
             PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.Standalone, previousDefineSymbols);
             AssetDatabase.SaveAssets();
         }

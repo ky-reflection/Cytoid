@@ -9,7 +9,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class CytoidPlayerMenuController : MonoBehaviour
+public class CytoidLabMenuController : MonoBehaviour
 {
     public const float UiSpacing = 12f;
     public const float ButtonHeight = 48f;
@@ -32,6 +32,7 @@ public class CytoidPlayerMenuController : MonoBehaviour
     private Transform root;
     private Text statusText;
     private Transform levelListRoot;
+    private ScrollRect levelScrollRect;
     private readonly Dictionary<Difficulty, Button> difficultyButtonMap = new Dictionary<Difficulty, Button>();
     private bool isRefreshingLevelList;
 
@@ -51,18 +52,18 @@ public class CytoidPlayerMenuController : MonoBehaviour
         uiFont = Resources.Load<Font>("Fonts/Nunito-Regular");
         if (uiFont == null)
         {
-            Debug.LogWarning("[CytoidPlayer] Nunito-Regular font not found; falling back to default font.");
+            Debug.LogWarning("[CytoidLab] Nunito-Regular font not found; falling back to default font.");
             uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
 
         try
         {
             BuildUi();
-            Debug.Log("[CytoidPlayer] Menu UI built successfully.");
+            Debug.Log("[CytoidLab] Menu UI built successfully.");
         }
         catch (Exception e)
         {
-            Debug.LogError($"[CytoidPlayer] Failed to build menu UI: {e}");
+            Debug.LogError($"[CytoidLab] Failed to build menu UI: {e}");
         }
     }
 
@@ -88,14 +89,14 @@ public class CytoidPlayerMenuController : MonoBehaviour
 
     private void BuildUi()
     {
-        var go = new GameObject("CytoidPlayerMenu");
+        var go = new GameObject("CytoidLabMenu");
         canvas = go.AddComponent<Canvas>();
         if (canvas == null) throw new InvalidOperationException("Failed to add Canvas component.");
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
         var scaler = go.AddComponent<CanvasScaler>();
         if (scaler == null) throw new InvalidOperationException("Failed to add CanvasScaler component.");
-        CytoidPlayerShell.ConfigureCanvasScaler(scaler);
+        CytoidLabShell.ConfigureCanvasScaler(scaler);
         if (go.AddComponent<GraphicRaycaster>() == null) throw new InvalidOperationException("Failed to add GraphicRaycaster component.");
 
         if (FindObjectOfType<EventSystem>() == null)
@@ -130,7 +131,7 @@ public class CytoidPlayerMenuController : MonoBehaviour
         vlg.childForceExpandWidth = false;
         vlg.childForceExpandHeight = false;
 
-        var title = CreateText(root, "Cytoid Player", TitleFontSize, TextAnchor.MiddleCenter);
+        var title = CreateText(root, $"Cytoid Lab {CytoidLabVersion.DisplayName}", TitleFontSize, TextAnchor.MiddleCenter);
         title.GetComponent<LayoutElement>().preferredHeight = 64;
 
         var hintText = CreateText(root, "Select a level below or use Import to load a .cytoidlevel file.\nF11 = fullscreen, ESC = back/exit fullscreen.", HintFontSize,
@@ -155,22 +156,28 @@ public class CytoidPlayerMenuController : MonoBehaviour
         scrollLe.flexibleWidth = 1;
         scrollLe.minWidth = 400;
         var scrollComp = scroll.AddComponent<ScrollRect>();
+        levelScrollRect = scrollComp;
 
         var viewport = CreateUiObject("Viewport", scroll.transform);
         var vpRect = viewport.GetComponent<RectTransform>();
         vpRect.anchorMin = Vector2.zero;
-        vpRect.anchorMax = new Vector2(1, 1);
+        vpRect.anchorMax = Vector2.one;
+        vpRect.offsetMin = Vector2.zero;
         vpRect.offsetMax = new Vector2(-20, 0);
-        viewport.AddComponent<Mask>().showMaskGraphic = false;
+        viewport.AddComponent<RectMask2D>();
         viewport.AddComponent<Image>().color = new Color(0, 0, 0, 0.2f);
 
         levelListRoot = CreateUiObject("LevelList", viewport.transform).transform;
         var listRect = levelListRoot.GetComponent<RectTransform>();
-        listRect.anchorMin = Vector2.zero;
-        listRect.anchorMax = Vector2.one;
-        listRect.sizeDelta = Vector2.zero;
+        listRect.anchorMin = new Vector2(0, 1);
+        listRect.anchorMax = new Vector2(1, 1);
+        listRect.pivot = new Vector2(0.5f, 1);
+        listRect.anchoredPosition = Vector2.zero;
+        listRect.sizeDelta = new Vector2(0, 0);
         var listVlg = levelListRoot.gameObject.AddComponent<VerticalLayoutGroup>();
         listVlg.spacing = 4;
+        listVlg.padding = new RectOffset(0, 0, 0, 8);
+        listVlg.childControlWidth = true;
         listVlg.childControlHeight = true;
         listVlg.childForceExpandWidth = true;
         listVlg.childForceExpandHeight = false;
@@ -199,11 +206,13 @@ public class CytoidPlayerMenuController : MonoBehaviour
         scrollComp.verticalScrollbar = sb;
         scrollComp.vertical = true;
         scrollComp.horizontal = false;
+        scrollComp.movementType = ScrollRect.MovementType.Clamped;
 
         var diffTitle = CreateText(root, "Difficulty", SectionFontSize, TextAnchor.MiddleLeft);
         diffTitle.GetComponent<LayoutElement>().preferredHeight = 36;
 
         var diffRoot = CreateUiObject("DifficultyRoot", root).transform;
+        diffRoot.gameObject.AddComponent<LayoutElement>().preferredHeight = ButtonHeight;
         var diffHlg = diffRoot.gameObject.AddComponent<HorizontalLayoutGroup>();
         diffHlg.spacing = UiSpacing;
         diffHlg.childControlWidth = true;
@@ -288,7 +297,7 @@ public class CytoidPlayerMenuController : MonoBehaviour
     private void SetStatus(string message)
     {
         if (statusText != null) statusText.text = message;
-        if (!string.IsNullOrEmpty(message)) Debug.Log($"[CytoidPlayer] {message}");
+        if (!string.IsNullOrEmpty(message)) Debug.Log($"[CytoidLab] {message}");
     }
 
     private void ShowGameErrorIfAny()
@@ -426,7 +435,7 @@ public class CytoidPlayerMenuController : MonoBehaviour
             }
             catch (Exception e)
             {
-                Debug.LogError($"[CytoidPlayer] Failed to refresh levels: {e}");
+                Debug.LogError($"[CytoidLab] Failed to refresh levels: {e}");
             }
 
             if (Context.LevelManager.LoadedLocalLevels.Count == 0)
@@ -459,10 +468,25 @@ public class CytoidPlayerMenuController : MonoBehaviour
             {
                 SelectLevel(selectedLevel);
             }
+
+            RebuildLevelListScroll();
         }
         finally
         {
             isRefreshingLevelList = false;
+        }
+    }
+
+    private void RebuildLevelListScroll()
+    {
+        if (levelListRoot == null) return;
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(levelListRoot as RectTransform);
+
+        if (levelScrollRect != null)
+        {
+            levelScrollRect.verticalNormalizedPosition = 1f;
         }
     }
 
@@ -623,7 +647,7 @@ public class CytoidPlayerMenuController : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[CytoidPlayer] Failed to read installed level meta: {e}");
+            Debug.LogError($"[CytoidLab] Failed to read installed level meta: {e}");
             return null;
         }
     }
@@ -637,7 +661,7 @@ public class CytoidPlayerMenuController : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[CytoidPlayer] OpenFileDialog failed: {e}");
+            Debug.LogError($"[CytoidLab] OpenFileDialog failed: {e}");
             return null;
         }
 #else

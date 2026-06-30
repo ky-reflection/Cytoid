@@ -215,7 +215,7 @@ public class Context : SingletonMonoBehavior<Context>
 #if UNITY_STANDALONE_WIN
         if (!GameEmbedMode.IsBridgeEmbedded)
         {
-            CytoidPlayerShell.EnsureInitialized();
+            CytoidLabShell.EnsureInitialized();
         }
 #endif
         UpdateGraphicsQuality();
@@ -270,11 +270,11 @@ public class Context : SingletonMonoBehavior<Context>
 
 #if UNITY_STANDALONE_WIN
         // Inject the Windows PC player menu if it isn't already present in the scene.
-        CytoidPlayerShell.EnsureInitialized();
-        if (UnityEngine.Object.FindObjectOfType<CytoidPlayerMenuController>() == null)
+        CytoidLabShell.EnsureInitialized();
+        if (UnityEngine.Object.FindObjectOfType<CytoidLabMenuController>() == null)
         {
-            var menuGo = new GameObject("CytoidPlayerMenuController");
-            menuGo.AddComponent<CytoidPlayerMenuController>();
+            var menuGo = new GameObject("CytoidLabMenuController");
+            menuGo.AddComponent<CytoidLabMenuController>();
         }
 #endif
     }
@@ -511,7 +511,7 @@ public class Context : SingletonMonoBehavior<Context>
 #if UNITY_STANDALONE_WIN
         if (!GameEmbedMode.IsBridgeEmbedded)
         {
-            CytoidPlayerShell.ApplyGraphicsQualityIfNeeded(quality);
+            CytoidLabShell.ApplyGraphicsQualityIfNeeded(quality);
             return;
         }
 #endif

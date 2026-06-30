@@ -4,10 +4,10 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Cytoid Player shell: window chrome, HUD injection, and gameplay camera bands.
+/// Cytoid Lab shell: window chrome, HUD injection, and gameplay camera bands.
 /// Gameplay camera viewport (player area) is independent of in-game overlay UI layout.
 /// </summary>
-public class CytoidPlayerShell : MonoBehaviour
+public class CytoidLabShell : MonoBehaviour
 {
     // Default window: play area + top/bottom HUD chrome (see WindowHeight).
     public const int PlayAreaWidth = 1280;
@@ -26,7 +26,7 @@ public class CytoidPlayerShell : MonoBehaviour
         (Application.platform == RuntimePlatform.WindowsPlayer ||
          Application.platform == RuntimePlatform.WindowsEditor);
 
-    public static CytoidPlayerShell Instance { get; private set; }
+    public static CytoidLabShell Instance { get; private set; }
 
     private static readonly Dictionary<Camera, float> OriginalAspects = new Dictionary<Camera, float>();
     private static GraphicsQuality? appliedGraphicsQuality;
@@ -38,8 +38,8 @@ public class CytoidPlayerShell : MonoBehaviour
     public static void EnsureInitialized()
     {
         if (!IsActive || Instance != null) return;
-        var go = new GameObject(nameof(CytoidPlayerShell));
-        go.AddComponent<CytoidPlayerShell>();
+        var go = new GameObject(nameof(CytoidLabShell));
+        go.AddComponent<CytoidLabShell>();
     }
 
     public static void ConfigureCanvasScaler(CanvasScaler scaler)
@@ -200,6 +200,7 @@ public class CytoidPlayerShell : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         SceneManager.sceneLoaded += OnSceneLoaded;
+        Debug.Log($"[CytoidLab] {CytoidLabVersion.DisplayName}");
 
         if (CurrentWindowWidth <= 0 || CurrentWindowHeight <= 0)
         {
@@ -299,10 +300,10 @@ public class CytoidPlayerShell : MonoBehaviour
 
     private static void EnsureGameHud()
     {
-        if (Object.FindObjectOfType<CytoidPlayerHudController>() != null) return;
+        if (Object.FindObjectOfType<CytoidLabHudController>() != null) return;
 
-        var hudGo = new GameObject("CytoidPlayerHud");
-        hudGo.AddComponent<CytoidPlayerHudController>();
+        var hudGo = new GameObject("CytoidLabHud");
+        hudGo.AddComponent<CytoidLabHudController>();
     }
 
     private static void ResetGameplayCameras()

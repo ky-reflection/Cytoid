@@ -5,7 +5,7 @@ using Cysharp.Threading.Tasks;
 namespace Cytoid.Storyboard
 {
     /// <summary>
-    /// Cytoid Player storyboard rewind for timeline scrubbing (partial Storyboard extension).
+    /// Cytoid Lab storyboard rewind for timeline scrubbing (partial Storyboard extension).
     /// </summary>
     public partial class Storyboard
     {

@@ -10,6 +10,8 @@ public class AllPerfectSplash : CleanTitleTransitionElement
 
     public void OnGameComplete()
     {
+        if (CytoidLabShell.IsActive) return;
+
         if (game.State.Mode != GameMode.Calibration && game.State.Score == 1000000 && !game.EditorImmediatelyComplete)
         {
             game.BeforeExitTasks.Add(Animate());

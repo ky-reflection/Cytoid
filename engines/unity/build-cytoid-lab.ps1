@@ -19,16 +19,16 @@ if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
     $ProjectPath = $PSScriptRoot
 }
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-    $OutputPath = Join-Path $PSScriptRoot "Builds\CytoidPlayer"
+    $OutputPath = Join-Path $PSScriptRoot "Builds\CytoidLab"
 }
 $ProjectPath = (Resolve-Path $ProjectPath).Path
 $OutputPath = [System.IO.Path]::GetFullPath($OutputPath)
 
-$exeName = "CytoidPlayer"
-$method = "CytoidCoreBuild.BuildCytoidPlayerWindows64"
+$exeName = "CytoidLab"
+$method = "CytoidCoreBuild.BuildCytoidLabWindows64"
 
 function Write-Info($message) {
-    Write-Host "[build-cytoid-player] $message" -ForegroundColor Cyan
+    Write-Host "[build-cytoid-lab] $message" -ForegroundColor Cyan
 }
 
 function Format-Duration([TimeSpan]$duration) {
@@ -128,7 +128,7 @@ try {
         Write-Info "Unity exited (PID $($unityProcess.Id), exit code: $script:UnityExitCode)."
     }
 
-    $builtExe = Join-Path $OutputPath "CytoidPlayer.exe"
+    $builtExe = Join-Path $OutputPath "CytoidLab.exe"
     if (-not (Test-Path $builtExe)) {
         $logTail = if (Test-Path $logFile) {
             Get-Content $logFile -Tail 40 | Out-String
@@ -162,7 +162,7 @@ $logTail
 
     if ($Package) {
         Measure-Phase 'Package zip' {
-            $zipPath = Join-Path $PSScriptRoot "Builds\CytoidPlayer.zip"
+            $zipPath = Join-Path $PSScriptRoot "Builds\CytoidLab.zip"
             if (Test-Path $zipPath) {
                 Remove-Item -Force $zipPath
             }

@@ -6,9 +6,9 @@
 engines/unity/.vsconfig
 engines/unity/UpgradeLog.htm
 
-# Cytoid Player local builds
-engines/unity/Builds/CytoidPlayer/
-engines/unity/Builds/CytoidPlayer.zip
+# Cytoid Lab local builds
+engines/unity/Builds/CytoidLab/
+engines/unity/Builds/CytoidLab.zip
 
 # Local scratch notes (not committed)
 docs/scratch/

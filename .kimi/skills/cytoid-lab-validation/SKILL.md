@@ -1,6 +1,6 @@
-# Cytoid Player Validation
+# Cytoid Lab Validation
 
-Use this skill when you need to verify that changes developed on another branch work correctly with the Cytoid Player Windows standalone build.
+Use this skill when you need to verify that changes developed on another branch work correctly with the Cytoid Lab Windows standalone build.
 
 ## When to use
 
@@ -29,8 +29,8 @@ Use this skill when you need to verify that changes developed on another branch 
    - `engines/unity/Assets/Scripts/Game/Game.cs`
    - `engines/unity/Assets/Scripts/Game/GameLaunchBridge.cs`
    - `engines/unity/Assets/Scripts/LevelManager.cs`
-   - `engines/unity/Assets/Scripts/Navigation/CytoidPlayerMenuController.cs`
-   - `engines/unity/Assets/Scripts/Game/CytoidPlayerHudController.cs`
+   - `engines/unity/Assets/Scripts/Navigation/CytoidLabMenuController.cs`
+   - `engines/unity/Assets/Scripts/Navigation/CytoidLab/CytoidLabHudController.cs`
    - `engines/unity/Assets/Scripts/Game/Notes/Note.cs`
    - `engines/unity/Assets/Scripts/Game/Notes/DragChildNote.cs`
    - `engines/unity/Assets/Scripts/Game/Notes/DragHeadNote.cs`
@@ -41,12 +41,12 @@ Use this skill when you need to verify that changes developed on another branch 
    ```bash
    "C:\Program Files\Unity\Hub\Editor\6000.0.75f1\Editor\Unity.exe" -batchmode -quit \
      -projectPath "E:/Code/Cytoid/engines/unity" \
-     -executeMethod CytoidCoreBuild.BuildCytoidPlayerWindows64 \
-     -logFile "E:/Code/Cytoid/engines/unity/Builds/CytoidPlayer/build.log"
+     -executeMethod CytoidCoreBuild.BuildCytoidLabWindows64 \
+     -logFile "E:/Code/Cytoid/engines/unity/Builds/CytoidLab/build.log"
    ```
 
 5. **Run and verify.**
-   - Launch `engines/unity/Builds/CytoidPlayer/CytoidPlayer.exe`.
+   - Launch `engines/unity/Builds/CytoidLab/CytoidLab.exe`.
    - If the level list is empty, import a `.cytoidlevel` file.
    - Check: level list visibility and scrolling, selection/highlighting, import, deletion, Auto toggle, hitsound toggle, seeking sync, pause/resume behavior, focus-loss behavior, HUD auto-hide.
 
@@ -65,5 +65,5 @@ Use this skill when you need to verify that changes developed on another branch 
 
 - The player branch intentionally keeps PC-specific UX separate from the bridge-embedded Flutter flow.
 - IL2CPP builds take several minutes; prefer batchmode for reproducible output.
-- Player logs are written to `%USERPROFILE%\AppData\LocalLow\TigerHix\Cytoid Player\Player.log`.
+- Player logs are written to `%USERPROFILE%\AppData\LocalLow\TigerHix\Cytoid Lab\Player.log`.
 - Local player builds and zip packages are gitignored (see `.gitignore`).

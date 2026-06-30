@@ -21,22 +21,28 @@ public class NoteId : MonoBehaviour
     public void SetModel(ChartModel.Note note)
     {
         text.text = note.id.ToString();
+
+        var scale = 0.1f;
+        var color = Color.white;
         switch (note.type)
         {
             case (int) NoteType.DragHead:
             case (int) NoteType.CDragHead:
-                transform.localScale *= 0.8f;
-                text.color = Color.black;
+                scale = 0.08f;
+                color = Color.black;
                 break;
             case (int) NoteType.DragChild:
             case (int) NoteType.CDragChild:
-                transform.localScale *= 0.6f;
-                text.color = Color.black;
+                scale = 0.06f;
+                color = Color.black;
                 break;
             case (int) NoteType.Flick:
-                text.color = Color.black;
+                color = Color.black;
                 break;
         }
+
+        transform.localScale = new Vector3(scale, scale, scale);
+        text.color = color.WithAlpha(visible ? 1 : 0);
     }
 
 }
