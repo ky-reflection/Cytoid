@@ -10,6 +10,9 @@ engines/unity/UpgradeLog.htm
 engines/unity/Builds/CytoidPlayer/
 engines/unity/Builds/CytoidPlayer.zip
 
+# Local scratch notes (not committed)
+docs/scratch/
+
 # Local PowerShell helper scripts (Unix equivalents are tracked)
 engines/unity/flutter_plugin/tool/*.ps1
 tools/vendor/*.ps1
