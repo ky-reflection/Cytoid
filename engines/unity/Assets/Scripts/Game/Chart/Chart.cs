@@ -49,7 +49,10 @@ public class Chart
         UseScannerSmoothing = useScannerSmoothing;
         
         baseSize = cameraOrthographicSize;
-        screenRatio = 1.0f * UnityEngine.Screen.width / UnityEngine.Screen.height;
+        var coordinateScreenHeight = CytoidLabShell.IsActive
+            ? CytoidLabShell.GetCoordinateScreenHeightPx()
+            : UnityEngine.Screen.height;
+        screenRatio = 1.0f * UnityEngine.Screen.width / coordinateScreenHeight;
         
         Model = new ChartModel();
         try

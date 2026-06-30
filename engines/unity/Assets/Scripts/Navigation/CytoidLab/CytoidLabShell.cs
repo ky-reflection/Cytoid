@@ -61,6 +61,13 @@ public class CytoidLabShell : MonoBehaviour
     public static float GetPlayViewportHeightPx() =>
         Mathf.Max(1f, UnityEngine.Screen.height - GetHudBandHeightPx() * 2f);
 
+    /// <summary>
+    /// Screen height for Chart screenRatio and storyboard note-unit canvas scale.
+    /// Matches gameplay camera aspect when HUD bands are active.
+    /// </summary>
+    public static float GetCoordinateScreenHeightPx() =>
+        IsActive ? GetPlayViewportHeightPx() : UnityEngine.Screen.height;
+
     public static void ApplyWindowSize(int playAreaWidth = PlayAreaWidth, int playAreaHeight = PlayAreaHeight)
     {
         if (!IsActive) return;

@@ -187,16 +187,20 @@ namespace Cytoid.Storyboard
 
             if (ScaleToCanvas)
             {
+                var screenHeight = CytoidLabShell.IsActive
+                    ? CytoidLabShell.GetCoordinateScreenHeightPx()
+                    : UnityEngine.Screen.height;
+                var screenWidth = UnityEngine.Screen.width;
                 switch (Unit)
                 {
                     case ReferenceUnit.NoteX:
-                        res = res / (Storyboard.Game.camera.orthographicSize * 2 / UnityEngine.Screen.height *
-                                     UnityEngine.Screen.width) * Storyboard.Renderer.Provider.CanvasRect.width;
+                        res = res / (Storyboard.Game.camera.orthographicSize * 2 / screenHeight *
+                                     screenWidth) * Storyboard.Renderer.Provider.CanvasRect.width;
                         break;
                     case ReferenceUnit.StageX:
                     case ReferenceUnit.CameraX:
-                        res = res / (Storyboard.Game.camera.orthographicSize / UnityEngine.Screen.height *
-                                     UnityEngine.Screen.width) * Storyboard.Renderer.Provider.CanvasRect.width;
+                        res = res / (Storyboard.Game.camera.orthographicSize / screenHeight *
+                                     screenWidth) * Storyboard.Renderer.Provider.CanvasRect.width;
                         break;
                     case ReferenceUnit.NoteY:
                         res = res / (Storyboard.Game.camera.orthographicSize * 2) *
