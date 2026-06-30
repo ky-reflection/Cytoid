@@ -28,7 +28,8 @@ public class CytoidLabHudController : MonoBehaviour
     private Button noteIdsButton;
     private Transform topBar;
     private Transform bottomBar;
-    private bool isDraggingSlider;
+    private bool isSliderInteracting;
+    private bool sliderDidDrag;
     private bool isResyncing;
     private bool wasPlayingBeforeDrag;
     private float hudVisibility;
@@ -96,7 +97,7 @@ public class CytoidLabHudController : MonoBehaviour
     {
         if (game == null || !game.IsLoaded) return;
 
-        if (timeSlider != null && !isDraggingSlider && game.State.IsPlaying)
+        if (timeSlider != null && !isSliderInteracting && game.State.IsPlaying)
         {
             var progress = game.MusicLength > 0 ? game.Music.PlaybackTime / game.MusicLength : 0;
             timeSlider.SetValueWithoutNotify(Mathf.Clamp01(progress));
@@ -138,7 +139,7 @@ public class CytoidLabHudController : MonoBehaviour
         var edgeSize = HudEdgeSize * UnityEngine.Screen.height / Mathf.Max(1, CytoidLabShell.WindowHeight);
         var nearTop = mouseY >= UnityEngine.Screen.height - edgeSize;
         var nearBottom = mouseY <= edgeSize;
-        var wantVisible = nearTop || nearBottom || isDraggingSlider;
+        var wantVisible = nearTop || nearBottom || isSliderInteracting;
         hudVisibility = Mathf.MoveTowards(hudVisibility, wantVisible ? 1f : 0f, Time.unscaledDeltaTime * HudAnimationSpeed);
 
         var topRect = topBar.GetComponent<RectTransform>();
@@ -277,6 +278,22 @@ public class CytoidLabHudController : MonoBehaviour
         statusText.color = new Color(1, 0.6f, 0.3f);
         statusText.GetComponent<LayoutElement>().preferredWidth = 240;
 
+        // Top-right version watermark (fixed overlay, not in layout groups)
+        var versionGo = CreateUiObject("Version", root);
+        var versionRect = versionGo.GetComponent<RectTransform>();
+        versionRect.anchorMin = new Vector2(1, 1);
+        versionRect.anchorMax = new Vector2(1, 1);
+        versionRect.pivot = new Vector2(1, 1);
+        versionRect.anchoredPosition = new Vector2(-12, -8);
+        versionRect.sizeDelta = new Vector2(64, 20);
+        versionText = versionGo.AddComponent<Text>();
+        versionText.font = uiFont;
+        versionText.text = CytoidLabVersion.DisplayName;
+        versionText.fontSize = 13;
+        versionText.alignment = TextAnchor.MiddleRight;
+        versionText.color = new Color(1f, 1f, 1f, 0.45f);
+        versionText.raycastTarget = false;
+
         // Bottom bar with timeline slider
         bottomBar = CreateUiObject("BottomBar", root).transform;
         var bottomRect = bottomBar.GetComponent<RectTransform>();
@@ -302,12 +319,6 @@ public class CytoidLabHudController : MonoBehaviour
         var sliderLayout = sliderGo.AddComponent<LayoutElement>();
         sliderLayout.flexibleWidth = 1;
         sliderLayout.minWidth = 200;
-
-        versionText = CreateText(bottomBar, CytoidLabVersion.DisplayName, 13, TextAnchor.MiddleRight);
-        versionText.color = new Color(1f, 1f, 1f, 0.45f);
-        var versionLayout = versionText.GetComponent<LayoutElement>();
-        versionLayout.flexibleWidth = 0;
-        versionLayout.preferredWidth = 52;
 
         var sliderBg = CreateUiObject("Background", sliderGo.transform);
         var sliderBgRect = sliderBg.GetComponent<RectTransform>();
@@ -350,11 +361,20 @@ public class CytoidLabHudController : MonoBehaviour
         timeSlider.onValueChanged.AddListener(OnSliderValueChanged);
 
         var sliderEvents = sliderGo.AddComponent<EventTrigger>();
-        var beginDrag = new EventTrigger.Entry {eventID = EventTriggerType.BeginDrag};
+
+        var pointerDown = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
+        pointerDown.callback.AddListener(_ => OnSliderPointerDown());
+        sliderEvents.triggers.Add(pointerDown);
+
+        var pointerUp = new EventTrigger.Entry { eventID = EventTriggerType.PointerUp };
+        pointerUp.callback.AddListener(_ => OnSliderPointerUp());
+        sliderEvents.triggers.Add(pointerUp);
+
+        var beginDrag = new EventTrigger.Entry { eventID = EventTriggerType.BeginDrag };
         beginDrag.callback.AddListener(_ => OnSliderBeginDrag());
         sliderEvents.triggers.Add(beginDrag);
 
-        var endDrag = new EventTrigger.Entry {eventID = EventTriggerType.EndDrag};
+        var endDrag = new EventTrigger.Entry { eventID = EventTriggerType.EndDrag };
         endDrag.callback.AddListener(_ => OnSliderEndDrag());
         sliderEvents.triggers.Add(endDrag);
     }
@@ -431,16 +451,18 @@ public class CytoidLabHudController : MonoBehaviour
 
     private void OnSliderValueChanged(float value)
     {
-        if (!isDraggingSlider || game == null || !game.IsLoaded || isResyncing) return;
+        if (!isSliderInteracting || game == null || !game.IsLoaded || isResyncing) return;
 
         var targetTime = value * game.MusicLength;
         game.PreviewTimeline(targetTime);
     }
 
-    private void OnSliderBeginDrag()
+    private void OnSliderPointerDown()
     {
         if (game == null || !game.IsLoaded || isResyncing) return;
-        isDraggingSlider = true;
+
+        sliderDidDrag = false;
+        isSliderInteracting = true;
         wasPlayingBeforeDrag = game.State.IsPlaying;
         if (game.State.IsPlaying)
         {
@@ -448,10 +470,39 @@ public class CytoidLabHudController : MonoBehaviour
         }
     }
 
-    private async UniTask OnSliderEndDragAsync()
+    private void OnSliderBeginDrag()
     {
-        isDraggingSlider = false;
-        if (game == null || !game.IsLoaded) return;
+        sliderDidDrag = true;
+    }
+
+    private void OnSliderPointerUp()
+    {
+        // Click on track: no BeginDrag/EndDrag — settle on release like drag.
+        if (!sliderDidDrag)
+        {
+            CommitSliderSeek();
+        }
+    }
+
+    private void OnSliderEndDrag()
+    {
+        CommitSliderSeek();
+    }
+
+    private void CommitSliderSeek()
+    {
+        if (!isSliderInteracting) return;
+
+        isSliderInteracting = false;
+        CommitSliderSeekAsync().Forget();
+    }
+
+    private async UniTask CommitSliderSeekAsync()
+    {
+        // Let Slider apply click/drag position before resync.
+        await UniTask.Yield(PlayerLoopTiming.LastPostLateUpdate);
+
+        if (game == null || !game.IsLoaded || isResyncing) return;
 
         isResyncing = true;
         try
@@ -469,11 +520,6 @@ public class CytoidLabHudController : MonoBehaviour
             isResyncing = false;
             UpdatePlayPauseLabel();
         }
-    }
-
-    private void OnSliderEndDrag()
-    {
-        OnSliderEndDragAsync().Forget();
     }
 
     private void HardReloadPlayfield()

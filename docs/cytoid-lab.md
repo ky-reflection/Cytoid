@@ -8,12 +8,11 @@
 ## Features (v0.1.0)
 
 - Level menu with installed levels and **Import .cytoidlevel**
-- In-game HUD: play/pause, auto, hitsound toggle, note ID overlay, fullscreen (F11)
-- **Timeline scrub** with soft preview while dragging and full playfield resync on release
+- In-game HUD: play/pause, auto, hitsound toggle, note ID overlay, fullscreen
+- **Timeline scrub** with soft preview while dragging and full playfield resync on release (click or drag)
 - Hold/long-hold progress restored after timeline seek
 - Storyboard camera and elements resync on scrub
 - Hard **Reset** (scene reload) for a clean retry
-- Version display in menu and HUD (`CytoidLabVersion`)
 
 ## Build
 
@@ -51,7 +50,7 @@ Runtime code lives under `engines/unity/Assets/Scripts/Navigation/CytoidLab/`:
 | `CytoidLabMenuController.cs` | Level selection menu |
 | `CytoidLabHudController.cs` | In-game HUD and timeline slider |
 | `CytoidLabVersion.cs` | Release version constant |
-| `Game.CytoidLab.cs` | Timeline preview, resync, note respawn |
+| `Game.CytoidLab.cs` | Timeline preview, resync, playfield restore at seek time |
 | `GameState.CytoidLab.cs` | Score/judgement rewind on seek |
 | `HoldNote.CytoidLab.cs` | Hold progress for timeline scrub |
 | `*.CytoidLab.cs` | Other partial extensions (drag, storyboard, …) |
