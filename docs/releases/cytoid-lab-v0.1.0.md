@@ -12,8 +12,6 @@
 
 First public preview of **Cytoid Lab** — a Windows desktop tool for chart authors to import, preview, and debug Cytoid levels using the Unity gameplay core.
 
-> This is **not** the main Cytoid app. Lab is for chart inspection and playtesting.
-
 ### Download
 
 - **Platform:** Windows 10/11 x64
@@ -48,9 +46,8 @@ Build locally:
 ### Known limitations
 
 - Windows only in this release
-- Uses the same local level storage as legacy debug builds (`%USERPROFILE%\AppData\LocalLow\TigerHix\…`)
+- Installed and imported levels are stored under `%USERPROFILE%\AppData\LocalLow\TigerHix\` (Unity persistent data on Windows)
 - While the slider is held, only audio/time are previewed; chart and storyboard state commit on release
-- Not a replacement for the production Cytoid client
 
 ### Build from source
 
@@ -68,8 +65,6 @@ Requires Unity **6000.0.75f1**.
 ## Cytoid Lab v0.1.0
 
 **Cytoid Lab** 首个公开预览版 —— 面向谱师与开发者的 Windows 桌面工具，用于导入、预览和调试 Cytoid 谱面（基于 Unity gameplay core）。
-
-> 这**不是**正式版 Cytoid 客户端。Lab 用于谱面检查与试玩验证。
 
 ### 下载
 
@@ -105,9 +100,8 @@ Requires Unity **6000.0.75f1**.
 ### 已知限制
 
 - 本版本仅支持 Windows
-- 关卡数据路径与旧版调试构建相同（`%USERPROFILE%\AppData\LocalLow\TigerHix\…`）
+- 已安装与导入的关卡数据保存在本机用户目录：`%USERPROFILE%\AppData\LocalLow\TigerHix\`（Windows 下 Unity 程序的本地持久化路径）
 - 按住滑条时仅预览音频/时间；松开时才提交谱面与 storyboard 状态
-- 不能替代正式版 Cytoid 客户端
 
 ### 从源码构建
 
