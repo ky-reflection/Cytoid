@@ -4,7 +4,7 @@ using System.Linq;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
-public class DragHeadNote : Note
+public partial class DragHeadNote : Note
 {
     protected override NoteRenderer CreateRenderer()
     {

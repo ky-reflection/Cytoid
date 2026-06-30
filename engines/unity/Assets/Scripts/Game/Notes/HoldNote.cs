@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class HoldNote : Note
+public partial class HoldNote : Note
 {
     public float HoldingStartTime { get; protected set; } = float.MaxValue;
     public float HeldDuration  { get; protected set; }
@@ -29,6 +29,7 @@ public class HoldNote : Note
         HoldProgress = default;
         HoldingFingers.Clear();
         playedHitSoundAtBegin = false;
+        ClearTimelineHoldProgress();
         base.Collect();
     }
 
@@ -63,6 +64,10 @@ public class HoldNote : Note
                 }
             }
         }
+        else if (UseTimelineHoldProgress)
+        {
+            RefreshTimelineHoldProgress();
+        }
         else
         {
             HoldProgress = 0;
@@ -85,6 +90,7 @@ public class HoldNote : Note
         
         if (isHolding)
         {
+            ClearTimelineHoldProgress();
             HoldingFingers.Add(finger);
             if (!previouslyHolding)
             {

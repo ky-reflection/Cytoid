@@ -234,7 +234,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         var backButton = CreateButton(topBar, "Back", () => game?.Abort());
         backButton.GetComponent<LayoutElement>().preferredWidth = 70;
 
-        var resetButton = CreateButton(topBar, "Reset", () => ResetPlayfield().Forget());
+        var resetButton = CreateButton(topBar, "Reset", HardReloadPlayfield);
         resetButton.GetComponent<LayoutElement>().preferredWidth = 70;
 
         playPauseButton = CreateButton(topBar, "Pause", () => TogglePause());
@@ -440,10 +440,6 @@ public class CytoidPlayerHudController : MonoBehaviour
         {
             var targetTime = timeSlider != null ? timeSlider.value * game.MusicLength : 0f;
             await game.ResyncPlayfieldToTime(targetTime, wasPlayingBeforeDrag);
-            if (wasPlayingBeforeDrag && game.IsLoaded && !game.State.IsPlaying)
-            {
-                game.WillUnpause();
-            }
         }
         catch (Exception e)
         {
@@ -453,6 +449,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         finally
         {
             isResyncing = false;
+            UpdatePlayPauseLabel();
         }
     }
 
@@ -461,7 +458,7 @@ public class CytoidPlayerHudController : MonoBehaviour
         OnSliderEndDragAsync().Forget();
     }
 
-    private async UniTask ResetPlayfield()
+    private void HardReloadPlayfield()
     {
         if (game == null || !game.IsLoaded || isResyncing) return;
 
@@ -470,26 +467,8 @@ public class CytoidPlayerHudController : MonoBehaviour
             game.Pause();
         }
 
-        if (timeSlider != null)
-        {
-            timeSlider.SetValueWithoutNotify(0);
-        }
-
-        isResyncing = true;
-        try
-        {
-            await game.ResyncPlayfieldToTime(0, false);
-            SetStatus("Reset to start.");
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"[CytoidPlayer] Reset failed: {e}");
-            SetStatus("Reset failed.");
-        }
-        finally
-        {
-            isResyncing = false;
-        }
+        game.HardReloadPlayfield();
+        SetStatus("Reloading...");
     }
 
     private void TogglePause()

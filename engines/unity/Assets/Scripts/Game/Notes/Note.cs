@@ -3,7 +3,7 @@ using System;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
-public abstract class Note : MonoBehaviour
+public abstract partial class Note : MonoBehaviour
 {
 
     [NonSerialized] public NoteRenderer Renderer;

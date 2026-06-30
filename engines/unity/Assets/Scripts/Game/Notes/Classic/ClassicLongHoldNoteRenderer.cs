@@ -77,7 +77,7 @@ public class ClassicLongHoldNoteRenderer : ClassicHoldNoteRenderer
                 SpriteMask.frontSortingOrder = baseSortingOrder + 2;
                 SpriteMask.backSortingOrder = baseSortingOrder - 1;
                 
-                if (HoldNote.IsHolding)
+                if (HoldNote.ShouldShowHoldBody)
                 {
                     if (Note.Game.Time > Note.Model.start_time + Note.JudgmentOffset)
                     {
@@ -112,7 +112,7 @@ public class ClassicLongHoldNoteRenderer : ClassicHoldNoteRenderer
         base.UpdateComponentOpacity();
         if (UseExperimentalAnimations)
         {
-            if (HoldNote.IsHolding && Note.Game.Time > Note.Model.start_time + Note.JudgmentOffset)
+            if (HoldNote.ShouldShowHoldBody && Note.Game.Time > Note.Model.start_time + Note.JudgmentOffset)
             {
                 Line2.color = Line2.color.WithAlpha(0.5f + HoldNote.HoldProgress * 0.5f);
             }

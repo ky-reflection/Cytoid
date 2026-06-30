@@ -1,7 +1,7 @@
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
-public class DragLineElement : MonoBehaviour
+public partial class DragLineElement : MonoBehaviour
 {
     private static readonly int MaterialEnd = Shader.PropertyToID("_End");
     private static readonly int MaterialStart = Shader.PropertyToID("_Start");

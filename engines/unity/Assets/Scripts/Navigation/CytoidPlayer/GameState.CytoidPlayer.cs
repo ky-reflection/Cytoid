@@ -28,7 +28,7 @@ public partial class GameState
         var judgmentOffset = Context.Player.Settings.JudgmentOffset;
         foreach (var note in game.Chart.Model.note_list)
         {
-            if (!IsNoteFullyPassed(note, targetTime, judgmentOffset)) continue;
+            if (!IsNoteFullyPassed(note, game.Chart.Model, targetTime, judgmentOffset)) continue;
 
             if (Mods.Contains(Mod.Auto))
             {
@@ -195,9 +195,24 @@ public partial class GameState
         }
     }
 
-    private static bool IsNoteFullyPassed(ChartModel.Note note, float targetTime, float judgmentOffset)
+    private static bool IsNoteFullyPassed(ChartModel.Note note, ChartModel chart, float targetTime, float judgmentOffset)
     {
-        var missThresh = ((NoteType) note.type).GetDefaultMissThreshold();
-        return targetTime > note.end_time + missThresh + judgmentOffset;
+        var type = (NoteType) note.type;
+        float endTime;
+        float missThresh;
+
+        if (type == NoteType.DragHead || type == NoteType.CDragHead)
+        {
+            endTime = note.GetDragEndNote(chart).end_time;
+            missThresh = (type == NoteType.CDragHead ? NoteType.CDragChild : NoteType.DragChild)
+                .GetDefaultMissThreshold();
+        }
+        else
+        {
+            endTime = note.end_time;
+            missThresh = type.GetDefaultMissThreshold();
+        }
+
+        return targetTime > endTime + missThresh + judgmentOffset;
     }
 }

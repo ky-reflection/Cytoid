@@ -31,6 +31,15 @@ public partial class Game
         ResyncPlayfieldToTime(targetTime, State != null && State.IsPlaying).Forget();
     }
 
+    /// <summary>
+    /// Hard reset: reload the Game scene from scratch (same as Retry).
+    /// </summary>
+    public void HardReloadPlayfield()
+    {
+        if (!IsLoaded) return;
+        Retry();
+    }
+
     public async UniTask ResyncPlayfieldToTime(float targetTime, bool resumePlaying = false)
     {
         if (!IsLoaded || State == null || State.IsCompleted || State.IsFailed) return;
@@ -81,6 +90,7 @@ public partial class Game
             GameStartedOrResumedTimestamp = UnityEngine.Time.realtimeSinceStartup;
             AudioListener.pause = false;
             State.IsPlaying = true;
+            onGameUnpaused.Invoke(this);
         }
 
         onGameUpdate.Invoke(this);
@@ -103,9 +113,9 @@ public partial class Game
             Chart.CurrentPageId++;
         }
 
-        var noteList = Chart.Model.note_list;
+        var notes = Chart.Model.note_map;
         Chart.CurrentNoteId = 0;
-        while (Chart.CurrentNoteId < noteList.Count && noteList[Chart.CurrentNoteId].intro_time - 1f < targetTime)
+        while (Chart.CurrentNoteId < notes.Count && notes[Chart.CurrentNoteId].intro_time - 1f < targetTime)
         {
             Chart.CurrentNoteId++;
         }
@@ -113,52 +123,105 @@ public partial class Game
 
     private void SpawnActiveNotesAtTime(float targetTime)
     {
-        var noteList = Chart.Model.note_list;
+        var notes = Chart.Model.note_map;
         var judgmentOffset = Context.Player.Settings.JudgmentOffset;
-        var spawnedHeads = new HashSet<int>();
+        var ensuredLineHeads = new HashSet<int>();
 
-        foreach (var note in noteList)
+        for (var noteId = 0; noteId < notes.Count; noteId++)
         {
+            var note = notes[noteId];
+            if (note.intro_time - 1f >= targetTime) continue;
+            if (State.IsJudged(note.id)) continue;
+            if (!IsNoteActiveAtTime(note, Chart.Model, targetTime, judgmentOffset)) continue;
+            if (ObjectPool.SpawnedNotes.ContainsKey(note.id)) continue;
+
             var type = (NoteType) note.type;
-            if (type == NoteType.DragHead || type == NoteType.CDragHead)
+            switch (type)
             {
-                if (!IsNoteActiveAtTime(note, targetTime, judgmentOffset) || State.IsJudged(note.id)) continue;
-                if (!spawnedHeads.Add(note.id)) continue;
-                SpawnDragChainFromHead(note, targetTime);
-                continue;
+                case NoteType.DragHead:
+                case NoteType.CDragHead:
+                    EnsureDragChainLines(note, targetTime, ensuredLineHeads);
+                    if (ObjectPool.SpawnNote(note) is DragHeadNote dragHead)
+                    {
+                        dragHead.FastForwardToTime(targetTime);
+                    }
+                    break;
+                case NoteType.DragChild:
+                case NoteType.CDragChild:
+                    EnsureDragChainLines(FindDragChainHead(note, Chart.Model), targetTime, ensuredLineHeads);
+                    ObjectPool.SpawnNote(note);
+                    break;
+                default:
+                    if (ObjectPool.SpawnNote(note) is HoldNote holdNote)
+                    {
+                        holdNote.ApplyResyncVisualState(targetTime);
+                    }
+                    break;
             }
-
-            if (type == NoteType.DragChild || type == NoteType.CDragChild) continue;
-
-            if (!IsNoteActiveAtTime(note, targetTime, judgmentOffset) || State.IsJudged(note.id)) continue;
-            ObjectPool.SpawnNote(note);
         }
     }
 
-    private static bool IsNoteActiveAtTime(ChartModel.Note note, float targetTime, float judgmentOffset)
+    private static bool IsNoteActiveAtTime(ChartModel.Note note, ChartModel chart, float targetTime, float judgmentOffset)
     {
         if (note.intro_time - 1f >= targetTime) return false;
-        var missThresh = ((NoteType) note.type).GetDefaultMissThreshold();
-        return targetTime <= note.end_time + missThresh + judgmentOffset;
+
+        var type = (NoteType) note.type;
+        float endTime;
+        float missThresh;
+
+        if (type == NoteType.DragHead || type == NoteType.CDragHead)
+        {
+            endTime = note.GetDragEndNote(chart).end_time;
+            missThresh = (type == NoteType.CDragHead ? NoteType.CDragChild : NoteType.DragChild)
+                .GetDefaultMissThreshold();
+        }
+        else
+        {
+            endTime = note.end_time;
+            missThresh = type.GetDefaultMissThreshold();
+        }
+
+        return targetTime <= endTime + missThresh + judgmentOffset;
     }
 
-    private void SpawnDragChainFromHead(ChartModel.Note head, float targetTime)
+    private void EnsureDragChainLines(ChartModel.Note head, float targetTime, HashSet<int> ensuredHeads)
     {
+        if (!ensuredHeads.Add(head.id)) return;
+        if (head.intro_time - 1f >= targetTime) return;
+
+        var notes = Chart.Model.note_map;
         var id = head.id;
-        while (id > 0)
+        while (id > 0 && notes[id].next_id > 0)
         {
-            var note = Chart.Model.note_map[id];
-            if (note.intro_time - 1f >= targetTime) break;
-            if (State.IsJudged(note.id)) break;
-
-            if (note.next_id > 0 && Chart.Model.note_map.ContainsKey(note.next_id))
+            var from = notes[id];
+            var to = notes[from.next_id];
+            if (targetTime < to.start_time)
             {
-                ObjectPool.SpawnDragLine(note, Chart.Model.note_map[note.next_id]);
+                var line = ObjectPool.SpawnDragLine(from, to);
+                line.ResyncVisualToTime(targetTime);
             }
-
-            ObjectPool.SpawnNote(note);
-            id = note.next_id;
+            id = from.next_id;
         }
+    }
+
+    private static ChartModel.Note FindDragChainHead(ChartModel.Note note, ChartModel chart)
+    {
+        foreach (var candidate in chart.note_list)
+        {
+            var type = (NoteType) candidate.type;
+            if (type != NoteType.DragHead && type != NoteType.CDragHead) continue;
+
+            var id = candidate.id;
+            while (id > 0)
+            {
+                if (id == note.id) return candidate;
+                var chainNote = chart.note_map[id];
+                if (chainNote.next_id <= 0) break;
+                id = chainNote.next_id;
+            }
+        }
+
+        return note;
     }
 
     private void ClearSpawnedObjects()
@@ -166,13 +229,19 @@ public partial class Game
         var notesToClear = new List<Note>(ObjectPool.SpawnedNotes.Values);
         foreach (var note in notesToClear)
         {
-            if (note != null && !note.IsCollected) note.Collect();
+            if (note != null && !note.IsCollected)
+            {
+                note.ForceDespawnForResync();
+            }
         }
 
         var dragLinesToClear = new List<DragLineElement>(ObjectPool.SpawnedDragLines.Values);
         foreach (var dragLine in dragLinesToClear)
         {
-            if (dragLine != null) ObjectPool.CollectDragLine(dragLine);
+            if (dragLine != null && !dragLine.IsCollected)
+            {
+                dragLine.Collect();
+            }
         }
     }
 }
