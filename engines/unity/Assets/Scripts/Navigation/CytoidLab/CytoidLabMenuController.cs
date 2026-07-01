@@ -132,11 +132,11 @@ public class CytoidLabMenuController : MonoBehaviour
         title.GetComponent<LayoutElement>().preferredHeight = 44;
 
         var hintText = CreateText(root,
-            "Select a level or Import a .cytoidlevel",
+            "Select a level or import a .cytoidlevel / .zip",
             HintFontSize, TextAnchor.MiddleCenter);
         hintText.GetComponent<LayoutElement>().preferredHeight = 22;
 
-        var importButton = CreateButton(root, "Import .cytoidlevel", () => ImportLevelFile().Forget());
+        var importButton = CreateButton(root, "Import level", () => ImportLevelFile().Forget());
         importButton.GetComponent<LayoutElement>().preferredHeight = ButtonHeight;
 
         statusText = CreateText(root, "", StatusFontSize, TextAnchor.MiddleLeft);
@@ -648,7 +648,7 @@ public class CytoidLabMenuController : MonoBehaviour
         var path = await PickCytoidLevelFile();
         if (string.IsNullOrEmpty(path))
         {
-            SetStatus("No file selected.");
+            SetStatus(CytoidLabLevelImport.LastPickerMessage ?? "No file selected.");
             return;
         }
 
@@ -662,6 +662,11 @@ public class CytoidLabMenuController : MonoBehaviour
         {
             // Keep the source file; the user picked it from their own storage.
             var installed = await Context.LevelManager.InstallLevels(new List<string> { path }, LevelType.User, deleteSource: false);
+            if (installed == null || installed.Count == 0)
+            {
+                SetStatus($"Import failed for {Path.GetFileName(path)}. See Player.log.");
+                return;
+            }
             // Remember the newly imported level so the list can select it after refresh.
             pendingSelectLevelId = ResolveLevelIdFromInstalledPaths(installed);
             // Ensure the newly installed level is loaded into LoadedLocalLevels.
@@ -694,9 +699,10 @@ public class CytoidLabMenuController : MonoBehaviour
     private async UniTask<string> PickCytoidLevelFile()
     {
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        await UniTask.SwitchToMainThread();
         try
         {
-            return await UniTask.RunOnThreadPool(ShowWindowsOpenFileDialog);
+            return CytoidLabLevelImport.PickLevelPackageWindows();
         }
         catch (Exception e)
         {
@@ -709,16 +715,53 @@ public class CytoidLabMenuController : MonoBehaviour
 #endif
     }
 
-#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-    [DllImport("comdlg32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern bool GetOpenFileName(ref OpenFileName ofn);
+    private void ProcessCommandLineImport()
+    {
+        var args = Environment.GetCommandLineArgs();
+        foreach (var arg in args)
+        {
+            if (!CytoidLabLevelImport.IsLevelPackagePath(arg)) continue;
+            if (!File.Exists(arg)) continue;
+            InstallLevelPackage(arg).Forget();
+            break;
+        }
+    }
+}
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-    private struct OpenFileName
+/// <summary>Cytoid Lab level package import helpers (.cytoidlevel / .zip).</summary>
+internal static class CytoidLabLevelImport
+{
+    public static string LastPickerMessage { get; private set; }
+
+    public static bool IsLevelPackagePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+
+        var extension = Path.GetExtension(path);
+        return extension.Equals(".cytoidlevel", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".zip", StringComparison.OrdinalIgnoreCase);
+    }
+
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+    private const int OfnExplorer = 0x00080000;
+    private const int OfnFileMustExist = 0x00001000;
+    private const int OfnPathMustExist = 0x00000800;
+    private const int OfnNoChangeDir = 0x00000008;
+    private const int FileBufferChars = 8192;
+    private const int FileTitleBufferChars = 256;
+
+    [DllImport("comdlg32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool GetOpenFileName([In, Out] OpenFileName ofn);
+
+    [DllImport("comdlg32.dll")]
+    private static extern int CommDlgExtendedError();
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private class OpenFileName
     {
         public int lStructSize;
-        public IntPtr hwndOwner;
-        public IntPtr hInstance;
+        public IntPtr hwndOwner = IntPtr.Zero;
+        public IntPtr hInstance = IntPtr.Zero;
         public string lpstrFilter;
         public string lpstrCustomFilter;
         public int nMaxCustFilter;
@@ -733,46 +776,65 @@ public class CytoidLabMenuController : MonoBehaviour
         public short nFileOffset;
         public short nFileExtension;
         public string lpstrDefExt;
-        public IntPtr lCustData;
-        public IntPtr lpfnHook;
+        public IntPtr lCustData = IntPtr.Zero;
+        public IntPtr lpfnHook = IntPtr.Zero;
         public string lpTemplateName;
-        public IntPtr pvReserved;
+        public IntPtr pvReserved = IntPtr.Zero;
         public int dwReserved;
         public int FlagsEx;
     }
 
-    private static string ShowWindowsOpenFileDialog()
+    public static string PickLevelPackageWindows()
     {
-        const int maxPath = 260;
-        var fileNameBuffer = new string('\0', maxPath);
+        LastPickerMessage = null;
+
         var ofn = new OpenFileName
         {
             lStructSize = Marshal.SizeOf(typeof(OpenFileName)),
-            lpstrFilter = "Cytoid Level\0*.cytoidlevel\0All Files\0*.*\0\0",
-            lpstrFile = fileNameBuffer,
-            nMaxFile = maxPath,
+            lpstrFilter = "Cytoid level\0*.cytoidlevel;*.zip\0ZIP archive\0*.zip\0All files\0*.*\0\0",
+            nFilterIndex = 1,
+            lpstrFile = new string('\0', FileBufferChars),
+            nMaxFile = FileBufferChars,
+            lpstrFileTitle = new string('\0', FileTitleBufferChars),
+            nMaxFileTitle = FileTitleBufferChars,
             lpstrTitle = "Select a Cytoid level",
-            Flags = 0x00000008 // OFN_HIDEREADONLY
+            Flags = OfnExplorer | OfnFileMustExist | OfnPathMustExist | OfnNoChangeDir
         };
 
-        if (GetOpenFileName(ref ofn))
+        if (!GetOpenFileName(ofn))
         {
-            return ofn.lpstrFile.TrimEnd('\0');
+            var dialogError = CommDlgExtendedError();
+            if (dialogError != 0)
+            {
+                LastPickerMessage = $"File picker failed (error {dialogError}). See Player.log.";
+                Debug.LogError($"[CytoidLab] GetOpenFileName failed: CommDlgExtendedError={dialogError}, Win32={Marshal.GetLastWin32Error()}");
+            }
+
+            return null;
         }
 
-        return null;
+        var path = ofn.lpstrFile;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            LastPickerMessage = "File picker returned an empty path.";
+            return null;
+        }
+
+        path = path.Split('\0')[0].Trim();
+        if (path.Length == 0 || !File.Exists(path))
+        {
+            LastPickerMessage = "Selected file was not found.";
+            Debug.LogError($"[CytoidLab] Picked path missing on disk: {path}");
+            return null;
+        }
+
+        if (!IsLevelPackagePath(path))
+        {
+            LastPickerMessage = "Select a .cytoidlevel or .zip file.";
+            return null;
+        }
+
+        return path;
     }
 #endif
-
-    private void ProcessCommandLineImport()
-    {
-        var args = Environment.GetCommandLineArgs();
-        foreach (var arg in args)
-        {
-            if (!arg.EndsWith(".cytoidlevel", StringComparison.OrdinalIgnoreCase)) continue;
-            if (!File.Exists(arg)) continue;
-            InstallLevelPackage(arg).Forget();
-            break;
-        }
-    }
 }
