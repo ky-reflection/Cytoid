@@ -37,6 +37,7 @@ public class CytoidLabHudController : MonoBehaviour
     private const float HudEdgeSize = 40f;
     private const float HudAnimationSpeed = 12f;
     private const float TimelineTrackHeight = 6f;
+    private const float TimelineHitHeight = 28f;
     private const float TimelineHandleSize = 12f;
 
     private void Awake()
@@ -315,7 +316,7 @@ public class CytoidLabHudController : MonoBehaviour
         var bottomRect = bottomBar.GetComponent<RectTransform>();
         bottomRect.anchorMin = Vector2.zero;
         bottomRect.anchorMax = new Vector2(1, 0);
-        bottomRect.pivot = new Vector2(0.5f, 0);
+        bottomRect.pivot = new Vector2(0.8f, 0);
         bottomRect.sizeDelta = new Vector2(0, CytoidLabShell.BottomHudOverlayHeightPx);
         var bottomImage = bottomBar.gameObject.AddComponent<Image>();
         bottomImage.color = new Color(0, 0, 0, 0.55f);
@@ -338,6 +339,18 @@ public class CytoidLabHudController : MonoBehaviour
         sliderLayout.preferredHeight = TimelineTrackHeight;
         sliderLayout.minWidth = 0;
 
+        // Tall transparent hit target; visual track stays thin.
+        var hitArea = CreateUiObject("HitArea", sliderGo.transform);
+        var hitAreaRect = hitArea.GetComponent<RectTransform>();
+        hitAreaRect.anchorMin = new Vector2(0f, 0.5f);
+        hitAreaRect.anchorMax = new Vector2(1f, 0.5f);
+        hitAreaRect.pivot = new Vector2(0.5f, 0.5f);
+        hitAreaRect.sizeDelta = new Vector2(0f, TimelineHitHeight);
+        var hitImage = hitArea.AddComponent<Image>();
+        hitImage.color = new Color(0f, 0f, 0f, 0f);
+        hitImage.raycastTarget = true;
+        timeSlider.targetGraphic = hitImage;
+
         var sliderBg = CreateUiObject("Background", sliderGo.transform);
         var sliderBgRect = sliderBg.GetComponent<RectTransform>();
         sliderBgRect.anchorMin = new Vector2(0f, 0.5f);
@@ -346,7 +359,7 @@ public class CytoidLabHudController : MonoBehaviour
         sliderBgRect.sizeDelta = new Vector2(0f, TimelineTrackHeight);
         var sliderBgImage = sliderBg.AddComponent<Image>();
         sliderBgImage.color = new Color(0.2f, 0.2f, 0.2f);
-        timeSlider.targetGraphic = sliderBgImage;
+        sliderBgImage.raycastTarget = false;
 
         var fillArea = CreateUiObject("Fill Area", sliderGo.transform);
         var fillAreaRect = fillArea.GetComponent<RectTransform>();
@@ -362,6 +375,7 @@ public class CytoidLabHudController : MonoBehaviour
         fillRect.sizeDelta = Vector2.zero;
         var fillImage = fill.AddComponent<Image>();
         fillImage.color = new Color(0.3f, 0.6f, 1f);
+        fillImage.raycastTarget = false;
 
         var handleInset = TimelineHandleSize * 0.5f;
         var handleArea = CreateUiObject("Handle Slide Area", sliderGo.transform);
@@ -373,10 +387,22 @@ public class CytoidLabHudController : MonoBehaviour
 
         var handle = CreateUiObject("Handle", handleArea.transform);
         var handleRect = handle.GetComponent<RectTransform>();
-        handleRect.sizeDelta = new Vector2(TimelineHandleSize, TimelineHandleSize);
+        handleRect.sizeDelta = new Vector2(TimelineHandleSize, TimelineHitHeight);
         var handleImage = handle.AddComponent<Image>();
         handleImage.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
         handleImage.color = Color.white;
+
+        var handleVisual = CreateUiObject("HandleVisual", handle.transform);
+        var handleVisualRect = handleVisual.GetComponent<RectTransform>();
+        handleVisualRect.anchorMin = new Vector2(0.5f, 0.5f);
+        handleVisualRect.anchorMax = new Vector2(0.5f, 0.5f);
+        handleVisualRect.pivot = new Vector2(0.5f, 0.5f);
+        handleVisualRect.sizeDelta = new Vector2(TimelineHandleSize, TimelineHandleSize);
+        var handleVisualImage = handleVisual.AddComponent<Image>();
+        handleVisualImage.sprite = handleImage.sprite;
+        handleVisualImage.color = Color.white;
+        handleVisualImage.raycastTarget = false;
+        handleImage.color = new Color(1f, 1f, 1f, 0f);
 
         timeSlider.fillRect = fillRect;
         timeSlider.handleRect = handleRect;

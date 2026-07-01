@@ -146,9 +146,6 @@ public class CytoidLabMenuController : MonoBehaviour
         statusText.color = new Color(1, 0.8f, 0.4f);
         statusText.GetComponent<LayoutElement>().preferredHeight = 22;
 
-        var listTitle = CreateText(root, "Installed Levels", SectionFontSize, TextAnchor.MiddleLeft);
-        listTitle.GetComponent<LayoutElement>().preferredHeight = 28;
-
         var scroll = CreateUiObject("LevelScroll", root);
         var scrollLe = scroll.AddComponent<LayoutElement>();
         scrollLe.preferredHeight = 200;
@@ -159,12 +156,14 @@ public class CytoidLabMenuController : MonoBehaviour
         var scrollComp = scroll.AddComponent<ScrollRect>();
         levelScrollRect = scrollComp;
 
+        const float scrollbarWidth = 12f;
+
         var viewport = CreateUiObject("Viewport", scroll.transform);
         var vpRect = viewport.GetComponent<RectTransform>();
         vpRect.anchorMin = Vector2.zero;
         vpRect.anchorMax = Vector2.one;
         vpRect.offsetMin = Vector2.zero;
-        vpRect.offsetMax = new Vector2(-20, 0);
+        vpRect.offsetMax = new Vector2(-scrollbarWidth, 0);
         viewport.AddComponent<RectMask2D>();
         viewport.AddComponent<Image>().color = new Color(0, 0, 0, 0.2f);
 
@@ -189,14 +188,14 @@ public class CytoidLabMenuController : MonoBehaviour
         sbRect.anchorMin = new Vector2(1, 0);
         sbRect.anchorMax = Vector2.one;
         sbRect.pivot = new Vector2(1, 0.5f);
-        sbRect.sizeDelta = new Vector2(20, 0);
+        sbRect.sizeDelta = new Vector2(scrollbarWidth, 0);
         var sb = scrollbar.AddComponent<Scrollbar>();
         sb.direction = Scrollbar.Direction.BottomToTop;
         var sbBg = scrollbar.AddComponent<Image>();
         sbBg.color = new Color(0.1f, 0.1f, 0.1f, 0.5f);
         var sbHandle = CreateUiObject("Handle", scrollbar.transform);
         var sbHandleRect = sbHandle.GetComponent<RectTransform>();
-        sbHandleRect.sizeDelta = new Vector2(20, 20);
+        sbHandleRect.sizeDelta = new Vector2(scrollbarWidth, scrollbarWidth);
         var sbHandleImage = sbHandle.AddComponent<Image>();
         sbHandleImage.color = new Color(0.3f, 0.6f, 1f);
         sb.targetGraphic = sbHandleImage;
