@@ -10,10 +10,26 @@ public partial class Game
 {
     public bool UseInstantPauseResume;
 
+    /// <summary>
+    /// Cytoid Lab only (set during timeline drag / resync). When true, <see cref="Note.OnGameUpdate"/>
+    /// skips Auto and miss/clear so scrubbing does not mutate gameplay state (RC-10).
+    /// Always false during normal play and on Bridge/mobile builds.
+    /// </summary>
+    public bool SuppressTimelineGameplayMutations { get; internal set; }
+
+    /// <summary>Called when timeline scrub UI releases the slider (after resync or cancel).</summary>
+    internal void EndTimelineScrub()
+    {
+        SuppressTimelineGameplayMutations = false;
+        ClearSpawnedHoldTimelineVisualState();
+    }
+
     public void PreviewTimeline(float targetTime)
     {
         if (!IsLoaded || State == null || State.IsCompleted || State.IsFailed) return;
 
+        // Drag preview: light resync (visual-only). Full rebuild on slider release.
+        SuppressTimelineGameplayMutations = true;
         targetTime = Mathf.Clamp(targetTime, 0, MusicLength);
         Music.Stop();
         Music.PlaybackTime = targetTime;
@@ -23,9 +39,17 @@ public partial class Game
         Time = targetTime;
         MusicProgress = MusicLength > 0 ? Time / MusicLength : 0;
         ChartProgress = ChartLength > 0 ? Time / ChartLength : 0;
+
+        ResetChartIndicesToTime(targetTime);
+        PruneInactiveSpawnedObjects(targetTime);
+        // Ignore judged/cleared state so scrubbing back shows notes at targetTime (RS-4).
+        SpawnActiveNotesAtTime(targetTime, visualPreviewOnly: true);
         RefreshSpawnedHoldProgress(targetTime);
+        RefreshSpawnedDragVisualState(targetTime, visualPreviewOnly: true);
+
         Music.Play(AudioTrackIndex.Reserved1);
         onGameUpdate.Invoke(this);
+        onGameLateUpdate.Invoke(this);
     }
 
     public void Seek(float targetTime)
@@ -49,54 +73,64 @@ public partial class Game
         targetTime = Mathf.Clamp(targetTime, 0, MusicLength);
         var wasPlaying = resumePlaying;
 
-        State.IsPlaying = false;
-        AudioListener.pause = true;
-
-        Music.Stop();
-        Music.PlaybackTime = targetTime;
-
-        var nowDspTime = AudioSettings.dspTime;
-        MusicStartedTimestamp = nowDspTime - targetTime;
-
-        Time = targetTime;
-        MusicProgress = MusicLength > 0 ? Time / MusicLength : 0;
-        ChartProgress = ChartLength > 0 ? Time / ChartLength : 0;
-
-        ResetChartIndicesToTime(targetTime);
-        ClearSpawnedObjects();
-        State.ResetToTime(this, targetTime);
-        SpawnActiveNotesAtTime(targetTime);
-        inputController.ResetTouchState();
-
-        State.IsCompleted = false;
-        State.IsFailed = false;
-
-        ResynchronizeChartOnNextFrame = true;
-        ticksBeforeSynchronization = 600;
-
-        if (Storyboard != null)
+        // Hold through resync until fast-forward + storyboard catch-up finish (RC-7).
+        SuppressTimelineGameplayMutations = true;
+        try
         {
-            try
-            {
-                await Storyboard.ResyncToTime(targetTime);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[CytoidLab] Storyboard resync failed: {e}");
-            }
-        }
+            State.IsPlaying = false;
+            AudioListener.pause = true;
 
-        Music.Play(AudioTrackIndex.Reserved1);
-        if (wasPlaying)
+            Music.Stop();
+            Music.PlaybackTime = targetTime;
+
+            var nowDspTime = AudioSettings.dspTime;
+            MusicStartedTimestamp = nowDspTime - targetTime;
+
+            Time = targetTime;
+            MusicProgress = MusicLength > 0 ? Time / MusicLength : 0;
+            ChartProgress = ChartLength > 0 ? Time / ChartLength : 0;
+
+            ResetChartIndicesToTime(targetTime);
+            ClearSpawnedObjects();
+            State.ResetToTime(this, targetTime);
+            SpawnActiveNotesAtTime(targetTime);
+            inputController.ResetTouchState();
+
+            State.IsCompleted = false;
+            State.IsFailed = false;
+
+            ResynchronizeChartOnNextFrame = true;
+            ticksBeforeSynchronization = 600;
+
+            if (Storyboard != null)
+            {
+                try
+                {
+                    await Storyboard.ResyncToTime(targetTime);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[CytoidLab] Storyboard resync failed: {e}");
+                }
+            }
+
+            Music.Play(AudioTrackIndex.Reserved1);
+            if (wasPlaying)
+            {
+                GameStartedOrResumedTimestamp = UnityEngine.Time.realtimeSinceStartup;
+                AudioListener.pause = false;
+                State.IsPlaying = true;
+                onGameUnpaused.Invoke(this);
+            }
+
+            onGameUpdate.Invoke(this);
+            onGameLateUpdate.Invoke(this);
+        }
+        finally
         {
-            GameStartedOrResumedTimestamp = UnityEngine.Time.realtimeSinceStartup;
-            AudioListener.pause = false;
-            State.IsPlaying = true;
-            onGameUnpaused.Invoke(this);
+            SuppressTimelineGameplayMutations = false;
+            ClearSpawnedHoldTimelineVisualState();
         }
-
-        onGameUpdate.Invoke(this);
-        onGameLateUpdate.Invoke(this);
     }
 
     private void ResetChartIndicesToTime(float targetTime)
@@ -123,7 +157,7 @@ public partial class Game
         }
     }
 
-    private void SpawnActiveNotesAtTime(float targetTime)
+    private void SpawnActiveNotesAtTime(float targetTime, bool visualPreviewOnly = false)
     {
         var notes = Chart.Model.note_map;
         var judgmentOffset = Context.Player.Settings.JudgmentOffset;
@@ -133,7 +167,7 @@ public partial class Game
         {
             var note = notes[noteId];
             if (note.intro_time - 1f >= targetTime) continue;
-            if (State.IsJudged(note.id)) continue;
+            if (!visualPreviewOnly && State.IsJudged(note.id)) continue;
             if (!IsNoteActiveAtTime(note, Chart.Model, targetTime, judgmentOffset)) continue;
             if (ObjectPool.SpawnedNotes.ContainsKey(note.id)) continue;
 
@@ -156,7 +190,8 @@ public partial class Game
                 default:
                     if (ObjectPool.SpawnNote(note) is HoldNote holdNote)
                     {
-                        holdNote.ApplyTimelineHoldProgress(targetTime);
+                        // Body + head/ring approach (not just ApplyTimelineHoldProgress).
+                        holdNote.FastForwardVisualStateToTime(targetTime);
                     }
                     break;
             }
@@ -232,7 +267,76 @@ public partial class Game
         {
             if (note is HoldNote holdNote)
             {
-                holdNote.ApplyTimelineHoldProgress(time);
+                // Preview drag: keep on-screen holds aligned with slider time.
+                holdNote.FastForwardVisualStateToTime(time);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Timeline drag preview: PruneInactive clears all drag lines each frame; rebuild and
+    /// resync chains for every active head at <paramref name="targetTime"/> (RS-4).
+    /// </summary>
+    private void RefreshSpawnedDragVisualState(float targetTime, bool visualPreviewOnly = false)
+    {
+        var judgmentOffset = Context.Player.Settings.JudgmentOffset;
+        var ensuredLineHeads = new HashSet<int>();
+
+        foreach (var note in ObjectPool.SpawnedNotes.Values)
+        {
+            if (note is DragHeadNote dragHead)
+            {
+                dragHead.FastForwardToTime(targetTime);
+            }
+        }
+
+        foreach (var candidate in Chart.Model.note_list)
+        {
+            var type = (NoteType) candidate.type;
+            if (type != NoteType.DragHead && type != NoteType.CDragHead) continue;
+            if (candidate.intro_time - 1f >= targetTime) continue;
+            if (!visualPreviewOnly && State.IsJudged(candidate.id)) continue;
+            if (!IsNoteActiveAtTime(candidate, Chart.Model, targetTime, judgmentOffset)) continue;
+            EnsureDragChainLines(candidate, targetTime, ensuredLineHeads);
+        }
+    }
+
+    /// <summary>RC-9: drop frozen head approach snapshots when leaving scrub/resync.</summary>
+    private void ClearSpawnedHoldTimelineVisualState()
+    {
+        foreach (var note in ObjectPool.SpawnedNotes.Values)
+        {
+            if (note is HoldNote holdNote)
+            {
+                holdNote.ClearTimelineVisualState();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cytoid Lab timeline preview: remove notes/lines that are not active at
+    /// <paramref name="targetTime"/> (hold-seek RC-5). Full resync uses
+    /// <see cref="ClearSpawnedObjects"/> instead.
+    /// </summary>
+    private void PruneInactiveSpawnedObjects(float targetTime)
+    {
+        var judgmentOffset = Context.Player.Settings.JudgmentOffset;
+
+        var notesToClear = new List<Note>(ObjectPool.SpawnedNotes.Values);
+        foreach (var note in notesToClear)
+        {
+            if (note == null || note.IsCollected) continue;
+            if (IsNoteActiveAtTime(note.Model, Chart.Model, targetTime, judgmentOffset)) continue;
+            note.ForceDespawnForResync();
+        }
+
+        // Drag lines are recreated by SpawnActiveNotesAtTime when needed.
+        var dragLinesToClear = new List<DragLineElement>(ObjectPool.SpawnedDragLines.Values);
+        foreach (var dragLine in dragLinesToClear)
+        {
+            if (dragLine != null && !dragLine.IsCollected)
+            {
+                dragLine.Collect();
             }
         }
     }

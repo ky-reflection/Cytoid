@@ -129,8 +129,10 @@ public abstract partial class Note : MonoBehaviour
             // Update position
             gameObject.transform.localPosition = Model.CalculatePosition(Game.Chart);
 
-            // Autoplay
-            if (IsAutoEnabled())
+            // Autoplay — Cytoid Lab: skip during timeline scrub/resync so Auto does not call
+            // UpdateFinger (clears timeline hold state) or Clear notes mid-preview (RC-7, RC-10).
+            // SuppressTimelineGameplayMutations lives on Game.CytoidLab; false in normal play.
+            if (!Game.SuppressTimelineGameplayMutations && IsAutoEnabled())
             {
                 if (TimeUntilStart < 0)
                 {
@@ -145,8 +147,8 @@ public abstract partial class Note : MonoBehaviour
                 }
             }
 
-            // Check removable
-            if (ShouldMiss())
+            // Miss while paused/scrubbing would clear notes before visual state is written.
+            if (!Game.SuppressTimelineGameplayMutations && ShouldMiss())
             {
                 Clear(NoteGrade.Miss);
             }

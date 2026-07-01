@@ -86,29 +86,28 @@ ResyncPlayfieldToTime(targetTime)
 - Storyboard 只重建基础时间轴对象，不 replay trigger history；
 - chart events 只跳 cursor，不 catch up target 前事件状态。
 
-### 2.3 Preview 路径
+### 2.3 Preview 路径 — 2026-06-30 更新（light resync）
 
 入口：`CytoidLabHudController.OnSliderValueChanged` → `Game.PreviewTimeline`
 
 ```
 PreviewTimeline(targetTime)
-  ├─ Music.Stop
-  ├─ Music.PlaybackTime = targetTime
-  ├─ MusicStartedTimestamp = dspTime - targetTime
-  ├─ Game.Time / MusicProgress / ChartProgress = targetTime
+  ├─ SuppressTimelineGameplayMutations = true
+  ├─ Music.Stop / PlaybackTime / MusicStartedTimestamp / Game.Time
+  ├─ ResetChartIndicesToTime
+  ├─ PruneInactiveSpawnedObjects
+  ├─ SpawnActiveNotesAtTime(visualPreviewOnly: true)
   ├─ RefreshSpawnedHoldProgress
+  ├─ RefreshSpawnedDragVisualState
   ├─ Music.Play
-  └─ onGameUpdate
+  └─ onGameUpdate / onGameLateUpdate
 ```
 
 特点：
 
-- 不 reset chart cursor；
-- 不 clear/spawn active notes；
-- 不 reset input；
-- 不 reset score/judgement；
-- 不 resync storyboard；
-- 仍触发普通 `onGameUpdate`，所以会执行 Auto、miss/clear、hitsound、renderer update 等逻辑。
+- **已做：** chart cursor 对齐、active note 增量 prune/spawn、hold/drag visual fast-forward、`SuppressTimelineGameplayMutations` 隔离 Auto/miss；
+- **仍不做（留待松手 full resync）：** `State.ResetToTime`、input reset、storyboard resync、chart event catch-up；
+- preview 使用 `visualPreviewOnly` 忽略 `IsJudged`，以便拖回已打段落仍可见；松手后 full resync 重算判定状态。
 
 ---
 
@@ -117,12 +116,12 @@ PreviewTimeline(targetTime)
 | 状态域 | 正常播放 | Full resync | Preview | 主要风险 |
 |--------|----------|-------------|---------|----------|
 | 时间基准 | DSP 校准 + delta 累加 | 手动设置 target time | 手动设置 target time | preview 后 `Music.Play` 但 `State.IsPlaying=false`，音频预览与 gameplay 状态语义混合 |
-| Chart cursor | 单调推进 | 跳到 target 后 | 不动 | preview 与当前 cursor 不一致；future event seek 更明显 |
-| Note active set | 按 intro 窗口 spawn | 清场后重建 | 不重建 | 旧 note 残留、目标时间应出现 note 缺失 |
-| Note runtime state | 每帧更新 | 部分重置 + fast-forward | 只刷新已 spawn hold progress | preview 触发 gameplay 副作用 |
-| Hold visual | finger / Auto 驱动 | timeline progress only | timeline progress only | head/ring/body 状态源分裂 |
-| Drag visual | 插值推进 | 有 fast-forward | 不重建链 | preview 拖动期间 drag 状态可能不可信 |
-| Score/judgement | 实时写入 | `State.ResetToTime` 重算部分状态 | 不重算 | preview 可能污染判定状态 |
+| Chart cursor | 单调推进 | 跳到 target 后 | **ResetChartIndicesToTime** | event seek 仍缺 catch-up |
+| Note active set | 按 intro 窗口 spawn | 清场后重建 | **Prune + spawn（visualPreviewOnly）** | 已 clear 未 collect 的 note 边界情况待观察 |
+| Note runtime state | 每帧更新 | 部分重置 + fast-forward | fast-forward + suppress | Auto/miss 已隔离 |
+| Hold visual | finger / Auto 驱动 | full fast-forward | **FastForwardVisualStateToTime** | snapshot 仅在 suppress 期间读 renderer |
+| Drag visual | 插值推进 | 有 fast-forward | **RefreshSpawnedDragVisualState** | 每帧 prune 后重建 line |
+| Score/judgement | 实时写入 | `State.ResetToTime` 重算部分状态 | 不重算（spawn 忽略 judged 仅视觉） | 松手 resync 纠正 |
 | Input | touch runtime state | `ResetTouchState` | 不 reset | 拖动 preview 后残留触摸语义 |
 | Storyboard | time update + triggers | 重建非手动对象 | 不处理 | trigger 派生状态无法恢复 |
 | Chart UI events | type 0/1 即时处理 | 只跳 cursor | 不处理 | c2v3 UI animation 需要 catch-up |
@@ -250,18 +249,18 @@ Full resync 应分层执行：
 
 ## 6. 修复优先级
 
-### P0：Hold bug 最小闭环
+### P0：Hold bug 最小闭环 — ✅ 2026-06-30
 
-1. `ProgressRing` 改 per-instance material 或 `MaterialPropertyBlock`。
-2. Preview 隔离 Auto/clear/hitsound 副作用。
-3. Hold 增加完整 fast-forward visual state。
-4. 统一 hold ring/body/head 的时间门控。
+1. ✅ `ProgressRing` → `MaterialPropertyBlock`（core）。
+2. ✅ Preview 隔离 Auto/miss（`SuppressTimelineGameplayMutations`）。
+3. ✅ Hold `FastForwardVisualStateToTime` + RC-9 snapshot 生命周期。
+4. ✅ ProgressRing 门控含 `JudgmentOffset`（RC-3）。
 
-### P1：Resync 系统一致性
+### P1：Resync 系统一致性 — 部分完成
 
-1. Preview 明确策略：轻量但无副作用，或接近 full resync。
-2. Full resync 的最后一帧 render 与 gameplay mutation 分离。
-3. Drag preview 状态纳入统一验证。
+1. ✅ Preview 策略：**light resync**（visual-only spawn + fast-forward，无 score/storyboard）。
+2. ⬜ Full resync 最后一帧 render 与 gameplay mutation 进一步分离（可选）。
+3. ✅ Drag preview 纳入 `RefreshSpawnedDragVisualState`。
 
 ### P2：Storyboard / c2v3 完整 seek
 

@@ -68,6 +68,13 @@ public partial class HoldNote : Note
         {
             HoldProgress = 0;
         }
+
+        // RC-9: FastForwardVisualStateToTime leaves UseTimelineVisualState set after resync;
+        // live opacity advances but frozen TimelineApproachScale made heads visible yet too small.
+        if (!Game.SuppressTimelineGameplayMutations && UseTimelineVisualState)
+        {
+            ClearTimelineVisualState();
+        }
     }
 
     public override bool ShouldMiss()

@@ -86,7 +86,8 @@ public class ClassicHoldNoteRenderer : ClassicNoteRenderer
                     break;
             }
             SpriteMask.enabled = true;
-            if (HoldNote.ShouldShowHoldBody && Game.Time >= Note.Model.start_time)
+            // Align ring/triangle gate with body progress (hold-seek RC-3: include JudgmentOffset).
+            if (HoldNote.ShouldShowHoldBody && Game.Time >= Note.Model.start_time + Note.JudgmentOffset)
             {
                 ProgressRing.OnUpdate();
                 Triangle.OnUpdate();
@@ -205,9 +206,19 @@ public class ClassicHoldNoteRenderer : ClassicNoteRenderer
         var newProgressRingScale = InitialProgressRingScale * scale;
         ProgressRing.transform.SetLocalScaleXY(newProgressRingScale.x, newProgressRingScale.y);
 
-        var timeScale = Game.Time >= Note.Model.start_time
-            ? 1f
-            : Mathf.Clamp((Game.Time - Note.Model.intro_time) / (Note.Model.start_time - Note.Model.intro_time), 0f, 1f);
+        // Cytoid Lab timeline seek: snapshot only while scrub/resync suppresses gameplay (RC-9).
+        // UseTimelineVisualState alone must not gate scale after scrub ends.
+        float timeScale;
+        if (HoldNote.UseTimelineVisualState && Game.SuppressTimelineGameplayMutations)
+        {
+            timeScale = HoldNote.TimelineApproachScale;
+        }
+        else
+        {
+            timeScale = Game.Time >= Note.Model.start_time
+                ? 1f
+                : Mathf.Clamp((Game.Time - Note.Model.intro_time) / (Note.Model.start_time - Note.Model.intro_time), 0f, 1f);
+        }
 
         var size = BaseTransformSize * Note.Model.Override.SizeMultiplier;
         var minPercentageSize = Note.Model.initial_scale;

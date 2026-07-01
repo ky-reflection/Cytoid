@@ -491,6 +491,8 @@ public class CytoidLabHudController : MonoBehaviour
         sliderDidDrag = false;
         isSliderInteracting = true;
         wasPlayingBeforeDrag = game.State.IsPlaying;
+        // Suppress Auto/clear for entire drag until CommitSliderSeekAsync ends (RC-10).
+        game.SuppressTimelineGameplayMutations = true;
         if (game.State.IsPlaying)
         {
             game.Pause();
@@ -545,6 +547,8 @@ public class CytoidLabHudController : MonoBehaviour
         finally
         {
             isResyncing = false;
+            // ResyncPlayfieldToTime clears suppress in its own finally; this covers early exit.
+            game?.EndTimelineScrub();
             UpdatePlayPauseLabel();
         }
     }

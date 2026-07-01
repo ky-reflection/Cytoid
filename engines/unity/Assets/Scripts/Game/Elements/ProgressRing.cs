@@ -1,5 +1,9 @@
 ﻿using UnityEngine;
 
+/// <summary>
+/// Hold progress ring shader driver. Uses per-renderer property blocks so concurrent holds
+/// do not stomp each other's fill color/cutoff (sharedMaterial crosstalk — see hold-seek RC-1).
+/// </summary>
 [ExecuteInEditMode]
 public class ProgressRing : MonoBehaviour
 {
@@ -9,6 +13,7 @@ public class ProgressRing : MonoBehaviour
 
     public SpriteRenderer spriteRenderer;
     private int fillCutoffId, fillColorId, maxCutoffId;
+    private MaterialPropertyBlock propertyBlock;
 
     private void Awake()
     {
@@ -22,16 +27,23 @@ public class ProgressRing : MonoBehaviour
     {
         spriteRenderer.enabled = true;
         fillCutoff = Mathf.Min(fillCutoff, maxCutoff);
-        spriteRenderer.sharedMaterial.SetFloat(fillCutoffId, fillCutoff);
-        spriteRenderer.sharedMaterial.SetFloat(maxCutoffId, maxCutoff);
-        spriteRenderer.sharedMaterial.SetColor(fillColorId, fillColor);
+        // MaterialPropertyBlock: isolate shader uniforms per ring instance (Lab + production).
+        propertyBlock ??= new MaterialPropertyBlock();
+        propertyBlock.SetFloat(fillCutoffId, fillCutoff);
+        propertyBlock.SetFloat(maxCutoffId, maxCutoff);
+        propertyBlock.SetColor(fillColorId, fillColor);
+        spriteRenderer.SetPropertyBlock(propertyBlock);
     }
-    
+
     public void Reset()
     {
-        if (spriteRenderer != null) spriteRenderer.enabled = false;
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.SetPropertyBlock(null);
+            spriteRenderer.enabled = false;
+        }
+
         maxCutoff = 0;
         fillCutoff = 0;
     }
-
 }

@@ -7,6 +7,18 @@
 
 > **System context:** 本文档聚焦 Hold / LongHold，是 [Timeline Resync 系统评审](2026-07-01-cytoid-lab-resync-system-review.md) 的子集问题。Preview 副作用隔离、active note set 重建、storyboard trigger replay、c2v3 event catch-up 等系统级问题以 resync 系统文档为准。
 
+> **Implementation (2026-06-30, Phase A + preview):** Phase A 最小闭环已落地；拖拽预览改为 light resync。Core 侵入范围见 [cytoid-lab.md — Core integration boundary](cytoid-lab.md#core-integration-boundary)。**未做：** Phase B storyboard trigger replay、Phase C Style 2 body 门控、Phase B4 chart event catch-up。
+
+| Phase A 项 | RC | 状态 |
+|------------|-----|------|
+| ProgressRing `MaterialPropertyBlock` | RC-1 | ✅ core |
+| Hold `FastForwardVisualStateToTime` + approach snapshot 生命周期 | RC-9 | ✅ Lab partial + `ClassicHoldNoteRenderer` / `HoldNote` |
+| ProgressRing 门控含 `JudgmentOffset` | RC-3 | ✅ core renderer |
+| Preview / resync 隔离 Auto、miss | RC-10 | ✅ `SuppressTimelineGameplayMutations` |
+| Preview prune + spawn active set | RC-5 | ✅ `PreviewTimeline` |
+| Preview drag line 重建 | RS-4 | ✅ `RefreshSpawnedDragVisualState` |
+| Preview 忽略 `IsJudged`（纯视觉） | RS-4 | ✅ `visualPreviewOnly` spawn |
+
 ---
 
 ## 1. 问题描述
@@ -86,20 +98,24 @@ ResyncPlayfieldToTime(targetTime)
   └─ onGameUpdate / onGameLateUpdate（手动触发一次）
 ```
 
-### 3.2 拖拽预览（slider 拖动中）
+### 3.2 拖拽预览（slider 拖动中）— 2026-06-30 更新
 
 ```
-PreviewTimeline(targetTime)
+PreviewTimeline(targetTime)   // light resync（visual-only）
+  ├─ SuppressTimelineGameplayMutations = true
   ├─ Time / Music 跳到 targetTime
-  ├─ RefreshSpawnedHoldProgress     // 仅更新已在场上的 hold body 进度
-  └─ onGameUpdate
-  // ❌ 不 ClearSpawnedObjects
-  // ❌ 不 SpawnActiveNotesAtTime
-  // ❌ 不 refresh head/判定环 approach 态
-  // ⚠️ 仍触发普通 Note.OnGameUpdate：Auto / clear / hitsound 等 gameplay 副作用未隔离
+  ├─ ResetChartIndicesToTime
+  ├─ PruneInactiveSpawnedObjects
+  ├─ SpawnActiveNotesAtTime(visualPreviewOnly: true)   // 忽略 IsJudged
+  ├─ RefreshSpawnedHoldProgress → FastForwardVisualStateToTime
+  ├─ RefreshSpawnedDragVisualState → FastForward + EnsureDragChainLines
+  ├─ Music.Play
+  └─ onGameUpdate / onGameLateUpdate
+  // ❌ 不 State.ResetToTime / 不 storyboard resync / 不 ResetTouchState
+  // ✅ Auto / miss 已隔离（SuppressTimelineGameplayMutations）
 ```
 
-**关键差异：** Drag 在 resync 时有 `FastForwardToTime`；Hold 只有 body 进度，**head + ProgressRing approach 态无 seek 专用路径**。Preview 路径 additionally 不重建音符集合。
+松手仍走 **3.1 完整 resync**。Preview 与 full resync 共享 spawn/fast-forward  helper，但 preview 不清场、不重算判定/分数。
 
 ### 3.3 整体同步系统分层
 
@@ -429,9 +445,10 @@ Spawn：`intro_time - 1 < targetTime`；Head 显示：`Time >= intro_time`。1 �
 |------|----------|------|
 | despawn on resync | ✅ `ForceDespawnForResync` | ✅ |
 | spawn at seek time | ✅ | ✅ |
-| position/state fast-forward | ✅ `FastForwardToTime` | ❌ 缺失 |
+| position/state fast-forward | ✅ `FastForwardToTime` | ✅ `FastForwardVisualStateToTime` (Phase A) |
 | body progress at seek | N/A | ✅ `ApplyTimelineHoldProgress` |
-| head/判定特效 fast-forward | N/A | ❌ 缺失（**本 bug 核心缺口**） |
+| head/判定特效 fast-forward | N/A | ✅ `TimelineApproachScale` + renderer gate (Phase A) |
+| preview 路径 | ✅ `RefreshSpawnedDragVisualState` | ✅ `RefreshSpawnedHoldProgress` |
 
 ---
 

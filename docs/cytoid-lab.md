@@ -16,16 +16,29 @@ Lab behavior should stay in `Navigation/CytoidLab/` and `*.CytoidLab.cs` partial
 | Lab partials | `Navigation/CytoidLab/*.CytoidLab.cs` | Timeline resync, hold/drag extensions on core types |
 | Core touchpoints | see below | Minimal `#if UNITY_STANDALONE_WIN` / `IsActive` guards only |
 
-**Current core touchpoints** (audit as of v0.1.1):
+**Current core touchpoints** (audit as of v0.1.1 + timeline seek Phase A):
 
-| File | Intrusion |
-|------|-----------|
-| `Context.cs` | `#if UNITY_STANDALONE_WIN`: shell bootstrap, menu inject, graphics-quality window sizing |
-| `AllPerfectSplash.cs`, `FullComboSplash.cs` | Skip result splashes when `CytoidLabShell.IsActive` |
-| `Game.cs`, `HoldNote.cs` | Comments pointing at `*.CytoidLab.cs` partials (no runtime Lab logic) |
-| `Chart.cs`, `GenericStateParser.cs` | **No Lab branches** — full-window `Screen` coords (overlay HUD does not crop the camera) |
+| File | Intrusion | Notes |
+|------|-----------|-------|
+| `Context.cs` | `#if UNITY_STANDALONE_WIN`: shell bootstrap, menu inject, graphics-quality window sizing | Lab shell only |
+| `AllPerfectSplash.cs`, `FullComboSplash.cs` | Skip result splashes when `CytoidLabShell.IsActive` | Lab shell only |
+| `ProgressRing.cs` | `MaterialPropertyBlock` per instance (hold-seek RC-1) | **Universal fix** — all builds benefit; not Lab-gated |
+| `Note.cs` | Skip Auto + miss/clear when `Game.SuppressTimelineGameplayMutations` | Property lives on `Game.CytoidLab` partial; always `false` on Bridge/mobile |
+| `HoldNote.cs` | Clear `UseTimelineVisualState` when scrub suppress ends (RC-9) | Calls Lab partial `ClearTimelineVisualState()`; no-op path when flag already false |
+| `ClassicHoldNoteRenderer.cs` | `JudgmentOffset` on ProgressRing gate (RC-3); read `TimelineApproachScale` only while suppress (RC-9) | Reads internal fields on `HoldNote.CytoidLab` partial |
+| `Game.cs`, `HoldNote.cs` (comments) | Pointers to `*.CytoidLab.cs` partials | No additional runtime Lab logic in core entry files |
+| `Chart.cs`, `GenericStateParser.cs` | **No Lab branches** | Full-window `Screen` coords; overlay HUD does not crop the camera |
 
-Bridge / mobile builds are unaffected (`GameEmbedMode.IsBridgeEmbedded` gates Lab shell).
+**Lab-only (no core edits beyond the table above):**
+
+| File | Role |
+|------|------|
+| `Game.CytoidLab.cs` | `PreviewTimeline` light resync, `ResyncPlayfieldToTime`, `SuppressTimelineGameplayMutations`, spawn/prune at seek time |
+| `HoldNote.CytoidLab.cs` | `FastForwardVisualStateToTime`, timeline hold body + head approach snapshot |
+| `CytoidLabHudController.cs` | Slider suppress lifecycle, `EndTimelineScrub` on release |
+| `DragHeadNote.CytoidLab.cs`, `DragLineElement.CytoidLab.cs`, `GameState.CytoidLab.cs`, storyboard partials | Drag fast-forward, score rewind, storyboard resync (pre-existing) |
+
+Bridge / mobile builds are unaffected (`GameEmbedMode.IsBridgeEmbedded` gates Lab shell; timeline seek APIs are never called).
 
 ## Features (v0.1.1)
 
@@ -33,8 +46,8 @@ Bridge / mobile builds are unaffected (`GameEmbedMode.IsBridgeEmbedded` gates La
 - **1280×720** play window; HUD is **Screen Space Overlay** (no camera viewport crop)
 - In-game HUD: play/pause, auto, hitsound, note IDs, fullscreen; edge-reveal auto-hide via **Input System** pointer
 - Full-width timeline scrub at bottom (thin track, round handle)
-- Soft preview while dragging; full playfield resync on release
-- Hold/long-hold progress restored after timeline seek; storyboard resync on scrub
+- **Light resync while dragging** (active note prune/spawn, hold/drag visual fast-forward, chart cursor); **full resync on release** (score/judgement, storyboard, input)
+- Hold/long-hold body + head approach restored after timeline seek; storyboard resync on scrub release
 - Hard **Reset** (scene reload)
 
 ## Build
