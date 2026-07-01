@@ -3,11 +3,15 @@ using UnityEngine.InputSystem;
 
 public static class GameInputCompat
 {
-    public static bool WasEscapePressedThisFrame()
+    public static bool WasKeyPressedThisFrame(Key key)
     {
         var keyboard = Keyboard.current;
-        return keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
+        return keyboard != null && keyboard[key].wasPressedThisFrame;
     }
+
+    public static bool WasEscapePressedThisFrame() => WasKeyPressedThisFrame(Key.Escape);
+
+    public static bool WasSpacePressedThisFrame() => WasKeyPressedThisFrame(Key.Space);
 
     public static bool TryGetPointerScreenPosition(out Vector2 screenPosition)
     {

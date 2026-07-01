@@ -99,12 +99,7 @@ public class CytoidLabMenuController : MonoBehaviour
         CytoidLabShell.ConfigureCanvasScaler(scaler);
         if (go.AddComponent<GraphicRaycaster>() == null) throw new InvalidOperationException("Failed to add GraphicRaycaster component.");
 
-        if (FindObjectOfType<EventSystem>() == null)
-        {
-            var eventSystem = new GameObject("EventSystem");
-            eventSystem.AddComponent<EventSystem>();
-            eventSystem.AddComponent<StandaloneInputModule>();
-        }
+        CytoidLabUiInput.EnsureEventSystem();
 
         // Full-screen background so the menu is visible even if layout has issues.
         var bgGo = CreateUiObject("Background", canvas.transform);
@@ -115,6 +110,8 @@ public class CytoidLabMenuController : MonoBehaviour
         bgRect.offsetMax = Vector2.zero;
         var bgImage = bgGo.AddComponent<Image>();
         bgImage.color = new Color(0.05f, 0.05f, 0.08f, 1f);
+
+        BuildHelpButton(canvas.transform);
 
         root = CreateUiObject("Root", canvas.transform).transform;
         var rootRect = root.GetComponent<RectTransform>();
@@ -243,6 +240,41 @@ public class CytoidLabMenuController : MonoBehaviour
         UpdateDifficultyButtons();
     }
 
+    private void BuildHelpButton(Transform parent)
+    {
+        var go = CreateUiObject("HelpButton", parent);
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(1, 1);
+        rect.anchorMax = new Vector2(1, 1);
+        rect.pivot = new Vector2(1, 1);
+        rect.anchoredPosition = new Vector2(-16, -16);
+        rect.sizeDelta = new Vector2(40, 40);
+
+        var image = go.AddComponent<Image>();
+        image.color = new Color(0.22f, 0.34f, 0.52f, 0.95f);
+
+        var btn = go.AddComponent<Button>();
+        var colors = btn.colors;
+        colors.highlightedColor = new Color(0.32f, 0.48f, 0.72f);
+        colors.pressedColor = new Color(0.16f, 0.24f, 0.38f);
+        btn.colors = colors;
+        btn.onClick.AddListener(() => CytoidLabHelpOverlay.Open(canvas.transform, uiFont));
+        CytoidLabUiInput.DisableKeyboardNavigation(btn);
+
+        var labelGo = CreateUiObject("Label", go.transform);
+        var labelRect = labelGo.GetComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.sizeDelta = Vector2.zero;
+        var label = labelGo.AddComponent<Text>();
+        label.font = uiFont;
+        label.text = "?";
+        label.fontSize = 24;
+        label.fontStyle = FontStyle.Bold;
+        label.alignment = TextAnchor.MiddleCenter;
+        label.color = Color.white;
+    }
+
     private static GameObject CreateUiObject(string name, Transform parent)
     {
         var go = new GameObject(name, typeof(RectTransform));
@@ -277,6 +309,7 @@ public class CytoidLabMenuController : MonoBehaviour
         var btn = go.AddComponent<Button>();
         if (btn == null) throw new InvalidOperationException("Failed to add Button component.");
         btn.onClick.AddListener(onClick);
+        CytoidLabUiInput.DisableKeyboardNavigation(btn);
 
         // LayoutElement is required by callers that set preferredHeight/Width.
         var buttonLe = go.AddComponent<LayoutElement>();
@@ -535,6 +568,7 @@ public class CytoidLabMenuController : MonoBehaviour
         infoButton.targetGraphic = infoHit;
         infoButton.transition = Selectable.Transition.None;
         infoButton.onClick.AddListener(() => SelectLevel(localLevel));
+        CytoidLabUiInput.DisableKeyboardNavigation(infoButton);
 
         var infoTextGo = CreateUiObject("Label", infoGo.transform);
         var infoTextRect = infoTextGo.GetComponent<RectTransform>();

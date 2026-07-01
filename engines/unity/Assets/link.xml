@@ -68,6 +68,7 @@
         -->
         <type fullname="CytoidLabMenuController" preserve="all"/>
         <type fullname="CytoidLabHudController" preserve="all"/>
+        <type fullname="CytoidLabHelpOverlay" preserve="all"/>
         <type fullname="CytoidLabShell" preserve="all"/>
     </assembly>
 

@@ -408,7 +408,9 @@ public partial class Game : MonoBehaviour
 
         if (!State.IsPlaying) return;
 
-        if (GameInputCompat.WasEscapePressedThisFrame() && State.Mode != GameMode.Tier)
+        // Cytoid Lab HUD owns Escape (pause/fullscreen); avoid same-frame pause+unpause.
+        if (!CytoidLabShell.IsActive &&
+            GameInputCompat.WasEscapePressedThisFrame() && State.Mode != GameMode.Tier)
         {
             Pause();
             return;

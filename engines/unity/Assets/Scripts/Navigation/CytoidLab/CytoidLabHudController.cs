@@ -123,11 +123,21 @@ public class CytoidLabHudController : MonoBehaviour
             {
                 TogglePause();
             }
+
+            CytoidLabUiInput.ClearUiSelection();
+            return;
         }
 
-        if (Keyboard.current?.f11Key.wasPressedThisFrame == true)
+        if (GameInputCompat.WasKeyPressedThisFrame(Key.F11))
         {
             ToggleFullscreen();
+            return;
+        }
+
+        if (!isSliderInteracting && !isResyncing && GameInputCompat.WasSpacePressedThisFrame())
+        {
+            TogglePause();
+            CytoidLabUiInput.ClearUiSelection();
         }
     }
 
@@ -192,6 +202,7 @@ public class CytoidLabHudController : MonoBehaviour
 
     private void OnGameLoaded()
     {
+        CytoidLabUiInput.ClearUiSelection();
         SetStatus("");
         UpdatePlayPauseLabel();
         UpdateAutoButton();
@@ -223,12 +234,7 @@ public class CytoidLabHudController : MonoBehaviour
         CytoidLabShell.ConfigureCanvasScaler(scaler);
         if (go.AddComponent<GraphicRaycaster>() == null) throw new InvalidOperationException("Failed to add GraphicRaycaster component.");
 
-        if (FindObjectOfType<EventSystem>() == null)
-        {
-            var eventSystem = new GameObject("EventSystem");
-            eventSystem.AddComponent<EventSystem>();
-            eventSystem.AddComponent<InputSystemUIInputModule>();
-        }
+        CytoidLabUiInput.EnsureEventSystem();
 
         var root = CreateUiObject("Root", canvas.transform).transform;
         var rootRect = root.GetComponent<RectTransform>();
@@ -456,6 +462,7 @@ public class CytoidLabHudController : MonoBehaviour
 
         var btn = go.AddComponent<Button>();
         btn.onClick.AddListener(onClick);
+        CytoidLabUiInput.DisableKeyboardNavigation(btn);
 
         // LayoutElement is required by callers that set preferredWidth.
         var layout = go.AddComponent<LayoutElement>();
