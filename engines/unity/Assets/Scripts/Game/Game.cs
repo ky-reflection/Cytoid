@@ -492,6 +492,7 @@ public partial class Game : MonoBehaviour
 
     protected virtual void OnApplicationPause(bool willPause)
     {
+        // Cytoid Lab preview: partial Game.CytoidLab.UseInstantPauseResume skips auto-pause on focus loss.
         if (UseInstantPauseResume) return;
         if (IsLoaded && State.IsStarted && willPause)
         {

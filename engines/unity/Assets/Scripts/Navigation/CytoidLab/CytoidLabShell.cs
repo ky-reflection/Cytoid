@@ -1,25 +1,29 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Cytoid Lab shell: window chrome, HUD injection, and gameplay camera bands.
-/// Gameplay camera viewport (player area) is independent of in-game overlay UI layout.
+/// Cytoid Lab shell: window sizing and overlay HUD injection.
+/// Gameplay uses the full window (no camera viewport crop); HUD draws on Screen Space Overlay.
 /// </summary>
 public class CytoidLabShell : MonoBehaviour
 {
-    // Default window: play area + top/bottom HUD chrome (see WindowHeight).
     public const int PlayAreaWidth = 1280;
     public const int PlayAreaHeight = 720;
-    public const float HudBandHeightPx = 64f;
 
-    public static int WindowHeight => PlayAreaHeight + Mathf.RoundToInt(HudBandHeightPx * 2f);
+    /// <summary>Overlay top chrome height at <see cref="PlayAreaHeight"/> reference.</summary>
+    public const float TopHudOverlayHeightPx = 40f;
+
+    /// <summary>Overlay bottom chrome (timeline) height at reference resolution.</summary>
+    public const float BottomHudOverlayHeightPx = 28f;
+
+    /// <summary>Window height equals play area (HUD does not reserve viewport pixels).</summary>
+    public static int WindowHeight => PlayAreaHeight;
 
     public static int CurrentPlayAreaWidth { get; private set; } = PlayAreaWidth;
     public static int CurrentPlayAreaHeight { get; private set; } = PlayAreaHeight;
     public static int CurrentWindowWidth { get; private set; } = PlayAreaWidth;
-    public static int CurrentWindowHeight { get; private set; } = WindowHeight;
+    public static int CurrentWindowHeight { get; private set; } = PlayAreaHeight;
 
     public static bool IsActive =>
         !GameEmbedMode.IsBridgeEmbedded &&
@@ -28,7 +32,6 @@ public class CytoidLabShell : MonoBehaviour
 
     public static CytoidLabShell Instance { get; private set; }
 
-    private static readonly Dictionary<Camera, float> OriginalAspects = new Dictionary<Camera, float>();
     private static GraphicsQuality? appliedGraphicsQuality;
     private static int lastObservedScreenWidth;
     private static int lastObservedScreenHeight;
@@ -45,28 +48,17 @@ public class CytoidLabShell : MonoBehaviour
     public static void ConfigureCanvasScaler(CanvasScaler scaler)
     {
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(PlayAreaWidth, WindowHeight);
+        scaler.referenceResolution = new Vector2(PlayAreaWidth, PlayAreaHeight);
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         scaler.matchWidthOrHeight = 0.5f;
     }
 
-    public static int GetWindowHeightForPlayArea(int playAreaHeight) =>
-        playAreaHeight + Mathf.RoundToInt(HudBandHeightPx * 2f);
+    public static float ScaleHudPx(float referencePx) =>
+        referencePx * UnityEngine.Screen.height / Mathf.Max(1, PlayAreaHeight);
 
-    /// <summary>HUD band height in current screen pixels (scales with window height).</summary>
-    public static float GetHudBandHeightPx() =>
-        HudBandHeightPx * UnityEngine.Screen.height / Mathf.Max(1, WindowHeight);
+    public static float GetTopHudOverlayHeightPx() => ScaleHudPx(TopHudOverlayHeightPx);
 
-    /// <summary>Pixel height of the gameplay camera viewport (not the in-game overlay UI).</summary>
-    public static float GetPlayViewportHeightPx() =>
-        Mathf.Max(1f, UnityEngine.Screen.height - GetHudBandHeightPx() * 2f);
-
-    /// <summary>
-    /// Screen height for Chart screenRatio and storyboard note-unit canvas scale.
-    /// Matches gameplay camera aspect when HUD bands are active.
-    /// </summary>
-    public static float GetCoordinateScreenHeightPx() =>
-        IsActive ? GetPlayViewportHeightPx() : UnityEngine.Screen.height;
+    public static float GetBottomHudOverlayHeightPx() => ScaleHudPx(BottomHudOverlayHeightPx);
 
     public static void ApplyWindowSize(int playAreaWidth = PlayAreaWidth, int playAreaHeight = PlayAreaHeight)
     {
@@ -75,7 +67,7 @@ public class CytoidLabShell : MonoBehaviour
         CurrentPlayAreaWidth = playAreaWidth;
         CurrentPlayAreaHeight = playAreaHeight;
         CurrentWindowWidth = playAreaWidth;
-        CurrentWindowHeight = GetWindowHeightForPlayArea(playAreaHeight);
+        CurrentWindowHeight = playAreaHeight;
 
         if (!UnityEngine.Screen.fullScreen)
         {
@@ -162,34 +154,6 @@ public class CytoidLabShell : MonoBehaviour
         return (width, height);
     }
 
-    public static void ApplyCameraBands(Camera cam)
-    {
-        if (!IsActive || cam == null) return;
-
-        if (!OriginalAspects.ContainsKey(cam))
-        {
-            OriginalAspects[cam] = cam.aspect;
-        }
-
-        var bandPx = GetHudBandHeightPx();
-        var bandNorm = bandPx / Mathf.Max(1, UnityEngine.Screen.height);
-        var playHeightPx = GetPlayViewportHeightPx();
-        cam.rect = new Rect(0f, bandNorm, 1f, Mathf.Max(0.01f, 1f - 2f * bandNorm));
-        cam.aspect = UnityEngine.Screen.width / playHeightPx;
-    }
-
-    public static void ResetCamera(Camera cam)
-    {
-        if (cam == null) return;
-
-        cam.rect = new Rect(0f, 0f, 1f, 1f);
-        if (OriginalAspects.TryGetValue(cam, out var aspect))
-        {
-            cam.aspect = aspect;
-            OriginalAspects.Remove(cam);
-        }
-    }
-
     private void Awake()
     {
         if (!IsActive)
@@ -231,14 +195,6 @@ public class CytoidLabShell : MonoBehaviour
         TrackUserResize();
     }
 
-    private void LateUpdate()
-    {
-        if (boundGame?.camera != null)
-        {
-            ApplyCameraBands(boundGame.camera);
-        }
-    }
-
     private static void TrackUserResize()
     {
         if (!IsActive || UnityEngine.Screen.fullScreen) return;
@@ -251,10 +207,8 @@ public class CytoidLabShell : MonoBehaviour
         lastObservedScreenHeight = h;
         CurrentWindowWidth = w;
         CurrentWindowHeight = h;
-
-        var bandPx = GetHudBandHeightPx();
         CurrentPlayAreaWidth = w;
-        CurrentPlayAreaHeight = Mathf.Max(1, Mathf.RoundToInt(h - bandPx * 2f));
+        CurrentPlayAreaHeight = h;
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -266,12 +220,11 @@ public class CytoidLabShell : MonoBehaviour
         if (scene.name == "Game")
         {
             EnsureGameHud();
-            BindGame(FindObjectOfType<Game>());
+            BindGame(Object.FindFirstObjectByType<Game>());
             return;
         }
 
         UnbindGame();
-        ResetGameplayCameras();
     }
 
     private void BindGame(Game game)
@@ -296,28 +249,18 @@ public class CytoidLabShell : MonoBehaviour
     private static void OnGameReadyToLoad(Game game)
     {
         SyncWindowSize();
-        ApplyCameraBands(game.camera);
     }
 
     private static void OnGameDisposed(Game game)
     {
-        ResetCamera(game.camera);
         SyncWindowSize();
     }
 
     private static void EnsureGameHud()
     {
-        if (Object.FindObjectOfType<CytoidLabHudController>() != null) return;
+        if (Object.FindFirstObjectByType<CytoidLabHudController>() != null) return;
 
         var hudGo = new GameObject("CytoidLabHud");
         hudGo.AddComponent<CytoidLabHudController>();
-    }
-
-    private static void ResetGameplayCameras()
-    {
-        foreach (var cam in Object.FindObjectsOfType<Camera>())
-        {
-            ResetCamera(cam);
-        }
     }
 }

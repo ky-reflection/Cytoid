@@ -3,22 +3,20 @@ using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 public class CytoidLabHudController : MonoBehaviour
 {
-    public const float UiSpacing = 8f;
-    public const float ButtonHeight = 48f;
-    public static float HudBandHeight => CytoidLabShell.HudBandHeightPx;
-
-    private static float ScaledHudBandHeightPx => CytoidLabShell.GetHudBandHeightPx();
+    public const float UiSpacing = 6f;
+    public const float ButtonHeight = 32f;
 
     private Font uiFont;
     private Canvas canvas;
     private Game game;
     private Slider timeSlider;
     private Text timeText;
-    private Text levelInfoText;
     private Text statusText;
     private Text versionText;
     private Button playPauseButton;
@@ -28,14 +26,18 @@ public class CytoidLabHudController : MonoBehaviour
     private Button noteIdsButton;
     private Transform topBar;
     private Transform bottomBar;
+    private Transform versionLabel;
     private bool isSliderInteracting;
     private bool sliderDidDrag;
     private bool isResyncing;
     private bool wasPlayingBeforeDrag;
-    private float hudVisibility;
+    private float topHudVisibility;
+    private float bottomHudVisibility;
 
-    private const float HudEdgeSize = 60f;
-    private const float HudAnimationSpeed = 10f;
+    private const float HudEdgeSize = 40f;
+    private const float HudAnimationSpeed = 12f;
+    private const float TimelineTrackHeight = 6f;
+    private const float TimelineHandleSize = 12f;
 
     private void Awake()
     {
@@ -122,11 +124,14 @@ public class CytoidLabHudController : MonoBehaviour
             }
         }
 
-        if (Input.GetKeyDown(KeyCode.F11))
+        if (Keyboard.current?.f11Key.wasPressedThisFrame == true)
         {
             ToggleFullscreen();
         }
+    }
 
+    private void LateUpdate()
+    {
         UpdateHudVisibility();
     }
 
@@ -134,26 +139,60 @@ public class CytoidLabHudController : MonoBehaviour
     {
         if (topBar == null || bottomBar == null) return;
 
-        var mouseY = Input.mousePosition.y;
-        var bandPx = ScaledHudBandHeightPx;
-        var edgeSize = HudEdgeSize * UnityEngine.Screen.height / Mathf.Max(1, CytoidLabShell.WindowHeight);
-        var nearTop = mouseY >= UnityEngine.Screen.height - edgeSize;
-        var nearBottom = mouseY <= edgeSize;
-        var wantVisible = nearTop || nearBottom || isSliderInteracting;
-        hudVisibility = Mathf.MoveTowards(hudVisibility, wantVisible ? 1f : 0f, Time.unscaledDeltaTime * HudAnimationSpeed);
+        var topBandPx = CytoidLabShell.GetTopHudOverlayHeightPx();
+        var bottomBandPx = CytoidLabShell.GetBottomHudOverlayHeightPx();
+        var edgeSize = HudEdgeSize * UnityEngine.Screen.height / Mathf.Max(1, CytoidLabShell.PlayAreaHeight);
+        var step = Time.unscaledDeltaTime * HudAnimationSpeed;
 
-        var topRect = topBar.GetComponent<RectTransform>();
-        topRect.anchoredPosition = new Vector2(0, bandPx * (1 - hudVisibility));
+        var wantTopVisible = false;
+        var wantBottomVisible = isSliderInteracting;
 
-        var bottomRect = bottomBar.GetComponent<RectTransform>();
-        bottomRect.anchoredPosition = new Vector2(0, -bandPx * (1 - hudVisibility));
+        if (GameInputCompat.TryGetPointerScreenPosition(out var mouse))
+        {
+            wantTopVisible = mouse.y >= UnityEngine.Screen.height - edgeSize;
+            wantBottomVisible = wantBottomVisible || mouse.y <= edgeSize;
+        }
+
+        topHudVisibility = Mathf.MoveTowards(topHudVisibility, wantTopVisible ? 1f : 0f, step);
+        bottomHudVisibility = Mathf.MoveTowards(bottomHudVisibility, wantBottomVisible ? 1f : 0f, step);
+
+        ApplyHudBarVisibility(topBar, topHudVisibility, topBandPx, topAnchored: true);
+        ApplyHudBarVisibility(bottomBar, bottomHudVisibility, bottomBandPx, topAnchored: false,
+            forceInteractable: isSliderInteracting);
+
+        if (versionLabel != null)
+        {
+            var versionRect = versionLabel.GetComponent<RectTransform>();
+            versionRect.anchoredPosition = new Vector2(-12, -8 + topBandPx * (1f - topHudVisibility));
+            if (versionText != null)
+            {
+                versionText.color = new Color(1f, 1f, 1f, 0.45f * topHudVisibility);
+            }
+        }
+    }
+
+    private static void ApplyHudBarVisibility(Transform bar, float visibility, float bandPx, bool topAnchored,
+        bool forceInteractable = false)
+    {
+        var rect = bar.GetComponent<RectTransform>();
+        var hideOffset = bandPx * (1f - visibility);
+        rect.anchoredPosition = topAnchored
+            ? new Vector2(0f, hideOffset)
+            : new Vector2(0f, -hideOffset);
+
+        var canvasGroup = bar.GetComponent<CanvasGroup>();
+        if (canvasGroup == null) return;
+
+        canvasGroup.alpha = Mathf.Max(visibility, forceInteractable ? 1f : 0f);
+        var interactable = forceInteractable || visibility > 0.15f;
+        canvasGroup.interactable = interactable;
+        canvasGroup.blocksRaycasts = interactable;
     }
 
     private void OnGameLoaded()
     {
         SetStatus("");
         UpdatePlayPauseLabel();
-        UpdateLevelInfo();
         UpdateAutoButton();
         UpdateHitSoundButton();
         UpdateNoteIdsButton();
@@ -162,24 +201,6 @@ public class CytoidLabHudController : MonoBehaviour
     private void OnGameStarted()
     {
         UpdatePlayPauseLabel();
-        UpdateLevelInfo();
-    }
-
-    private void UpdateLevelInfo()
-    {
-        if (levelInfoText == null || game == null || !game.IsLoaded) return;
-
-        var level = game.Level;
-        var difficulty = game.Difficulty;
-        if (level == null || difficulty == null)
-        {
-            levelInfoText.text = "";
-            return;
-        }
-
-        var title = level.Meta.title ?? level.Meta.id;
-        var diffLevel = level.Meta.GetDifficultyLevel(difficulty.Id);
-        levelInfoText.text = $"{title}  ·  {difficulty.Id} {diffLevel}";
     }
 
     private static GameObject CreateUiObject(string name, Transform parent)
@@ -205,7 +226,7 @@ public class CytoidLabHudController : MonoBehaviour
         {
             var eventSystem = new GameObject("EventSystem");
             eventSystem.AddComponent<EventSystem>();
-            eventSystem.AddComponent<StandaloneInputModule>();
+            eventSystem.AddComponent<InputSystemUIInputModule>();
         }
 
         var root = CreateUiObject("Root", canvas.transform).transform;
@@ -215,20 +236,18 @@ public class CytoidLabHudController : MonoBehaviour
         rootRect.offsetMin = Vector2.zero;
         rootRect.offsetMax = Vector2.zero;
 
-        CreateHudChromeBand(root, true);
-        CreateHudChromeBand(root, false);
-
-        // Top bar
+        // Top bar (overlay)
         topBar = CreateUiObject("TopBar", root).transform;
         var topRect = topBar.GetComponent<RectTransform>();
         topRect.anchorMin = new Vector2(0, 1);
         topRect.anchorMax = Vector2.one;
         topRect.pivot = new Vector2(0.5f, 1);
-        topRect.sizeDelta = new Vector2(0, HudBandHeight);
+        topRect.sizeDelta = new Vector2(0, CytoidLabShell.TopHudOverlayHeightPx);
         var topImage = topBar.gameObject.AddComponent<Image>();
-        topImage.color = new Color(0, 0, 0, 0.5f);
+        topImage.color = new Color(0, 0, 0, 0.55f);
+        topBar.gameObject.AddComponent<CanvasGroup>();
         var topHlg = topBar.gameObject.AddComponent<HorizontalLayoutGroup>();
-        topHlg.padding = new RectOffset(8, 8, 4, 4);
+        topHlg.padding = new RectOffset(6, 6, 2, 2);
         topHlg.spacing = UiSpacing;
         topHlg.childControlWidth = false;
         topHlg.childForceExpandWidth = false;
@@ -265,28 +284,25 @@ public class CytoidLabHudController : MonoBehaviour
         fullscreenButton = CreateButton(topBar, "Fullscreen", () => ToggleFullscreen());
         fullscreenButton.GetComponent<LayoutElement>().preferredWidth = 90;
 
-        timeText = CreateText(topBar, "00:00 / 00:00", 16, TextAnchor.MiddleCenter);
+        timeText = CreateText(topBar, "00:00 / 00:00", 14, TextAnchor.MiddleCenter);
         timeText.GetComponent<LayoutElement>().preferredWidth = 110;
-
-        levelInfoText = CreateText(topBar, "", 16, TextAnchor.MiddleCenter);
-        levelInfoText.GetComponent<LayoutElement>().flexibleWidth = 1;
 
         var spacer = CreateUiObject("Spacer", topBar);
         spacer.AddComponent<LayoutElement>().flexibleWidth = 1;
 
         statusText = CreateText(topBar, "", 14, TextAnchor.MiddleRight);
         statusText.color = new Color(1, 0.6f, 0.3f);
-        statusText.GetComponent<LayoutElement>().preferredWidth = 240;
+        statusText.GetComponent<LayoutElement>().preferredWidth = 200;
 
-        // Top-right version watermark (fixed overlay, not in layout groups)
-        var versionGo = CreateUiObject("Version", root);
-        var versionRect = versionGo.GetComponent<RectTransform>();
+        // Top-right version watermark (follows top bar auto-hide)
+        versionLabel = CreateUiObject("Version", root).transform;
+        var versionRect = versionLabel.GetComponent<RectTransform>();
         versionRect.anchorMin = new Vector2(1, 1);
         versionRect.anchorMax = new Vector2(1, 1);
         versionRect.pivot = new Vector2(1, 1);
         versionRect.anchoredPosition = new Vector2(-12, -8);
         versionRect.sizeDelta = new Vector2(64, 20);
-        versionText = versionGo.AddComponent<Text>();
+        versionText = versionLabel.gameObject.AddComponent<Text>();
         versionText.font = uiFont;
         versionText.text = CytoidLabVersion.DisplayName;
         versionText.fontSize = 13;
@@ -294,20 +310,21 @@ public class CytoidLabHudController : MonoBehaviour
         versionText.color = new Color(1f, 1f, 1f, 0.45f);
         versionText.raycastTarget = false;
 
-        // Bottom bar with timeline slider
+        // Bottom bar with timeline slider (thin overlay)
         bottomBar = CreateUiObject("BottomBar", root).transform;
         var bottomRect = bottomBar.GetComponent<RectTransform>();
         bottomRect.anchorMin = Vector2.zero;
         bottomRect.anchorMax = new Vector2(1, 0);
         bottomRect.pivot = new Vector2(0.5f, 0);
-        bottomRect.sizeDelta = new Vector2(0, HudBandHeight);
+        bottomRect.sizeDelta = new Vector2(0, CytoidLabShell.BottomHudOverlayHeightPx);
         var bottomImage = bottomBar.gameObject.AddComponent<Image>();
-        bottomImage.color = new Color(0, 0, 0, 0.5f);
+        bottomImage.color = new Color(0, 0, 0, 0.55f);
+        bottomBar.gameObject.AddComponent<CanvasGroup>();
         var bottomHlg = bottomBar.gameObject.AddComponent<HorizontalLayoutGroup>();
-        bottomHlg.padding = new RectOffset(8, 8, 4, 4);
-        bottomHlg.spacing = UiSpacing;
+        bottomHlg.padding = new RectOffset(8, 8, 2, 2);
+        bottomHlg.spacing = 0;
         bottomHlg.childControlWidth = true;
-        bottomHlg.childForceExpandWidth = false;
+        bottomHlg.childForceExpandWidth = true;
         bottomHlg.childControlHeight = true;
         bottomHlg.childForceExpandHeight = true;
 
@@ -318,22 +335,25 @@ public class CytoidLabHudController : MonoBehaviour
         timeSlider.value = 0;
         var sliderLayout = sliderGo.AddComponent<LayoutElement>();
         sliderLayout.flexibleWidth = 1;
-        sliderLayout.minWidth = 200;
+        sliderLayout.preferredHeight = TimelineTrackHeight;
+        sliderLayout.minWidth = 0;
 
         var sliderBg = CreateUiObject("Background", sliderGo.transform);
         var sliderBgRect = sliderBg.GetComponent<RectTransform>();
-        sliderBgRect.anchorMin = Vector2.zero;
-        sliderBgRect.anchorMax = Vector2.one;
-        sliderBgRect.sizeDelta = Vector2.zero;
+        sliderBgRect.anchorMin = new Vector2(0f, 0.5f);
+        sliderBgRect.anchorMax = new Vector2(1f, 0.5f);
+        sliderBgRect.pivot = new Vector2(0.5f, 0.5f);
+        sliderBgRect.sizeDelta = new Vector2(0f, TimelineTrackHeight);
         var sliderBgImage = sliderBg.AddComponent<Image>();
         sliderBgImage.color = new Color(0.2f, 0.2f, 0.2f);
         timeSlider.targetGraphic = sliderBgImage;
 
         var fillArea = CreateUiObject("Fill Area", sliderGo.transform);
         var fillAreaRect = fillArea.GetComponent<RectTransform>();
-        fillAreaRect.anchorMin = Vector2.zero;
-        fillAreaRect.anchorMax = Vector2.one;
-        fillAreaRect.sizeDelta = Vector2.zero;
+        fillAreaRect.anchorMin = new Vector2(0f, 0.5f);
+        fillAreaRect.anchorMax = new Vector2(1f, 0.5f);
+        fillAreaRect.pivot = new Vector2(0.5f, 0.5f);
+        fillAreaRect.sizeDelta = new Vector2(0f, TimelineTrackHeight);
 
         var fill = CreateUiObject("Fill", fillArea.transform);
         var fillRect = fill.GetComponent<RectTransform>();
@@ -343,16 +363,19 @@ public class CytoidLabHudController : MonoBehaviour
         var fillImage = fill.AddComponent<Image>();
         fillImage.color = new Color(0.3f, 0.6f, 1f);
 
+        var handleInset = TimelineHandleSize * 0.5f;
         var handleArea = CreateUiObject("Handle Slide Area", sliderGo.transform);
         var handleAreaRect = handleArea.GetComponent<RectTransform>();
         handleAreaRect.anchorMin = Vector2.zero;
         handleAreaRect.anchorMax = Vector2.one;
-        handleAreaRect.sizeDelta = Vector2.zero;
+        handleAreaRect.offsetMin = new Vector2(handleInset, 0f);
+        handleAreaRect.offsetMax = new Vector2(-handleInset, 0f);
 
         var handle = CreateUiObject("Handle", handleArea.transform);
         var handleRect = handle.GetComponent<RectTransform>();
-        handleRect.sizeDelta = new Vector2(20, 20);
+        handleRect.sizeDelta = new Vector2(TimelineHandleSize, TimelineHandleSize);
         var handleImage = handle.AddComponent<Image>();
+        handleImage.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
         handleImage.color = Color.white;
 
         timeSlider.fillRect = fillRect;
@@ -377,33 +400,10 @@ public class CytoidLabHudController : MonoBehaviour
         var endDrag = new EventTrigger.Entry { eventID = EventTriggerType.EndDrag };
         endDrag.callback.AddListener(_ => OnSliderEndDrag());
         sliderEvents.triggers.Add(endDrag);
-    }
 
-    private void CreateHudChromeBand(Transform parent, bool top)
-    {
-        var band = CreateUiObject(top ? "TopChrome" : "BottomChrome", parent).transform;
-        var rect = band.GetComponent<RectTransform>();
-        var bandPx = HudBandHeight;
-        if (top)
-        {
-            rect.anchorMin = new Vector2(0, 1);
-            rect.anchorMax = Vector2.one;
-            rect.pivot = new Vector2(0.5f, 1);
-            rect.sizeDelta = new Vector2(0, bandPx);
-            rect.anchoredPosition = Vector2.zero;
-        }
-        else
-        {
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = new Vector2(1, 0);
-            rect.pivot = new Vector2(0.5f, 0);
-            rect.sizeDelta = new Vector2(0, bandPx);
-            rect.anchoredPosition = Vector2.zero;
-        }
-
-        var image = band.gameObject.AddComponent<Image>();
-        image.color = new Color(0.02f, 0.02f, 0.04f, 1f);
-        image.raycastTarget = false;
+        topHudVisibility = 0f;
+        bottomHudVisibility = 0f;
+        UpdateHudVisibility();
     }
 
     private Text CreateText(Transform parent, string content, int fontSize, TextAnchor anchor)
@@ -432,7 +432,8 @@ public class CytoidLabHudController : MonoBehaviour
         btn.onClick.AddListener(onClick);
 
         // LayoutElement is required by callers that set preferredWidth.
-        go.AddComponent<LayoutElement>();
+        var layout = go.AddComponent<LayoutElement>();
+        layout.preferredHeight = ButtonHeight;
 
         var textGo = CreateUiObject("Label", go.transform);
         var textRect = textGo.GetComponent<RectTransform>();
@@ -442,7 +443,7 @@ public class CytoidLabHudController : MonoBehaviour
         var text = textGo.AddComponent<Text>();
         text.font = uiFont;
         text.text = label;
-        text.fontSize = 16;
+        text.fontSize = 14;
         text.alignment = TextAnchor.MiddleCenter;
         text.color = Color.white;
 

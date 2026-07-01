@@ -61,6 +61,7 @@ public partial class HoldNote : Note
         }
         else if (UseTimelineHoldProgress)
         {
+            // Cytoid Lab timeline seek: partial HoldNote.CytoidLab restores hold body length.
             RefreshTimelineHoldProgress();
         }
         else

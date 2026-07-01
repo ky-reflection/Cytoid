@@ -187,9 +187,7 @@ namespace Cytoid.Storyboard
 
             if (ScaleToCanvas)
             {
-                var screenHeight = CytoidLabShell.IsActive
-                    ? CytoidLabShell.GetCoordinateScreenHeightPx()
-                    : UnityEngine.Screen.height;
+                var screenHeight = UnityEngine.Screen.height;
                 var screenWidth = UnityEngine.Screen.width;
                 switch (Unit)
                 {

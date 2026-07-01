@@ -11,18 +11,18 @@ using UnityEngine.UI;
 
 public class CytoidLabMenuController : MonoBehaviour
 {
-    public const float UiSpacing = 12f;
-    public const float ButtonHeight = 48f;
+    public const float UiSpacing = 8f;
+    public const float ButtonHeight = 40f;
     public const float LevelButtonHeight = 40f;
-    public const int TitleFontSize = 38;
-    public const int HintFontSize = 20;
-    public const int StatusFontSize = 18;
-    public const int SectionFontSize = 24;
+    public const int TitleFontSize = 32;
+    public const int HintFontSize = 15;
+    public const int StatusFontSize = 15;
+    public const int SectionFontSize = 20;
     public const int LevelRowFontSize = 17;
     public const int ButtonFontSize = 20;
     public const float LevelRowHeight = 80f;
 
-    private static readonly Difficulty[] DifficultyOptions = {Difficulty.Easy, Difficulty.Hard, Difficulty.Extreme};
+    private static readonly Difficulty[] DifficultyOptions = { Difficulty.Easy, Difficulty.Hard, Difficulty.Extreme };
     private static readonly Color DifficultyAvailableColor = new Color(0.25f, 0.35f, 0.55f);
     private static readonly Color DifficultySelectedColor = new Color(0.3f, 0.6f, 1f);
     private static readonly Color DifficultyUnavailableColor = new Color(0.22f, 0.22f, 0.25f);
@@ -120,11 +120,11 @@ public class CytoidLabMenuController : MonoBehaviour
         var rootRect = root.GetComponent<RectTransform>();
         rootRect.anchorMin = Vector2.zero;
         rootRect.anchorMax = Vector2.one;
-        rootRect.offsetMin = new Vector2(120, 40);
-        rootRect.offsetMax = new Vector2(-120, -40);
+        rootRect.offsetMin = new Vector2(48, 16);
+        rootRect.offsetMax = new Vector2(-48, -16);
 
         var vlg = root.gameObject.AddComponent<VerticalLayoutGroup>();
-        vlg.spacing = UiSpacing;
+        vlg.spacing = 6f;
         vlg.childAlignment = TextAnchor.UpperCenter;
         vlg.childControlWidth = true;
         vlg.childControlHeight = true;
@@ -132,26 +132,27 @@ public class CytoidLabMenuController : MonoBehaviour
         vlg.childForceExpandHeight = false;
 
         var title = CreateText(root, $"Cytoid Lab {CytoidLabVersion.DisplayName}", TitleFontSize, TextAnchor.MiddleCenter);
-        title.GetComponent<LayoutElement>().preferredHeight = 64;
+        title.GetComponent<LayoutElement>().preferredHeight = 44;
 
-        var hintText = CreateText(root, "Select a level below or use Import to load a .cytoidlevel file.\nF11 = fullscreen, ESC = back/exit fullscreen.", HintFontSize,
-            TextAnchor.MiddleCenter);
-        hintText.GetComponent<LayoutElement>().preferredHeight = 52;
+        var hintText = CreateText(root,
+            "Select a level or Import a .cytoidlevel",
+            HintFontSize, TextAnchor.MiddleCenter);
+        hintText.GetComponent<LayoutElement>().preferredHeight = 22;
 
-        var importButton = CreateButton(root, "Import .cytoidlevel file", () => ImportLevelFile().Forget());
+        var importButton = CreateButton(root, "Import .cytoidlevel", () => ImportLevelFile().Forget());
         importButton.GetComponent<LayoutElement>().preferredHeight = ButtonHeight;
 
         statusText = CreateText(root, "", StatusFontSize, TextAnchor.MiddleLeft);
         statusText.color = new Color(1, 0.8f, 0.4f);
-        statusText.GetComponent<LayoutElement>().preferredHeight = 32;
+        statusText.GetComponent<LayoutElement>().preferredHeight = 22;
 
         var listTitle = CreateText(root, "Installed Levels", SectionFontSize, TextAnchor.MiddleLeft);
-        listTitle.GetComponent<LayoutElement>().preferredHeight = 36;
+        listTitle.GetComponent<LayoutElement>().preferredHeight = 28;
 
         var scroll = CreateUiObject("LevelScroll", root);
         var scrollLe = scroll.AddComponent<LayoutElement>();
-        scrollLe.preferredHeight = 240;
-        scrollLe.minHeight = 120;
+        scrollLe.preferredHeight = 200;
+        scrollLe.minHeight = 160;
         scrollLe.flexibleHeight = 1;
         scrollLe.flexibleWidth = 1;
         scrollLe.minWidth = 400;
@@ -208,10 +209,7 @@ public class CytoidLabMenuController : MonoBehaviour
         scrollComp.horizontal = false;
         scrollComp.movementType = ScrollRect.MovementType.Clamped;
 
-        var diffTitle = CreateText(root, "Difficulty", SectionFontSize, TextAnchor.MiddleLeft);
-        diffTitle.GetComponent<LayoutElement>().preferredHeight = 36;
-
-        var diffRoot = CreateUiObject("DifficultyRoot", root).transform;
+        var diffRoot = CreateUiObject("DifficultyRow", root).transform;
         diffRoot.gameObject.AddComponent<LayoutElement>().preferredHeight = ButtonHeight;
         var diffHlg = diffRoot.gameObject.AddComponent<HorizontalLayoutGroup>();
         diffHlg.spacing = UiSpacing;
@@ -224,14 +222,22 @@ public class CytoidLabMenuController : MonoBehaviour
         {
             var captured = diff;
             var diffButton = CreateButton(diffRoot, diff.Id, () => SelectDifficulty(captured));
-            diffButton.GetComponent<LayoutElement>().preferredHeight = ButtonHeight;
+            var diffLe = diffButton.GetComponent<LayoutElement>();
+            diffLe.preferredHeight = ButtonHeight;
+            diffLe.preferredWidth = 0;
+            diffLe.flexibleWidth = 1;
             difficultyButtonMap[diff] = diffButton;
         }
 
-        var startButton = CreateButton(root, "Start Game", () => StartGame());
-        startButton.GetComponent<LayoutElement>().preferredHeight = ButtonHeight;
+        var startButton = CreateButton(diffRoot, "Start", () => StartGame());
+        var startLe = startButton.GetComponent<LayoutElement>();
+        startLe.preferredHeight = ButtonHeight;
+        startLe.preferredWidth = 132;
+        startLe.flexibleWidth = 0;
         var startColors = startButton.colors;
         startColors.normalColor = new Color(0.2f, 0.8f, 0.3f);
+        startColors.highlightedColor = new Color(0.28f, 0.88f, 0.38f);
+        startColors.pressedColor = new Color(0.15f, 0.65f, 0.22f);
         startButton.colors = startColors;
 
         selectedDifficulty = Difficulty.Hard;
@@ -379,7 +385,7 @@ public class CytoidLabMenuController : MonoBehaviour
 
         if (!LevelHasChart(level, selectedDifficulty))
         {
-            foreach (var diff in new[] {Difficulty.Hard, Difficulty.Extreme, Difficulty.Easy})
+            foreach (var diff in new[] { Difficulty.Hard, Difficulty.Extreme, Difficulty.Easy })
             {
                 if (!LevelHasChart(level, diff)) continue;
                 selectedDifficulty = diff;
@@ -601,7 +607,7 @@ public class CytoidLabMenuController : MonoBehaviour
 
         SetStatus("Starting game...");
         Context.GameErrorState = null;
-        GameLaunchBridge.StartDebugGame(selectedLevel, selectedDifficulty, new List<Mod> {Mod.Auto});
+        GameLaunchBridge.StartDebugGame(selectedLevel, selectedDifficulty, new List<Mod> { Mod.Auto });
     }
 
     private async UniTask ImportLevelFile()
@@ -622,7 +628,7 @@ public class CytoidLabMenuController : MonoBehaviour
         try
         {
             // Keep the source file; the user picked it from their own storage.
-            var installed = await Context.LevelManager.InstallLevels(new List<string> {path}, LevelType.User, deleteSource: false);
+            var installed = await Context.LevelManager.InstallLevels(new List<string> { path }, LevelType.User, deleteSource: false);
             // Remember the newly imported level so the list can select it after refresh.
             pendingSelectLevelId = ResolveLevelIdFromInstalledPaths(installed);
             // Ensure the newly installed level is loaded into LoadedLocalLevels.

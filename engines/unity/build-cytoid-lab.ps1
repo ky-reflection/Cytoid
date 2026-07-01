@@ -108,6 +108,7 @@ try {
             "-logFile", $logFile
         )
 
+        $script:BuildStartedUtc = [DateTime]::UtcNow
         $unityProcess = Start-Process -FilePath $UnityPath -ArgumentList $unityArgs -PassThru
         if (-not $unityProcess) {
             throw "Failed to start Unity at: $UnityPath"
@@ -129,12 +130,22 @@ try {
     }
 
     $builtExe = Join-Path $OutputPath "CytoidLab.exe"
+    $logTail = if (Test-Path $logFile) {
+        Get-Content $logFile -Tail 40 | Out-String
+    } else {
+        "(log file missing)"
+    }
+
+    if ($script:UnityExitCode -ne 0) {
+        throw @"
+Build failed: Unity exited with code $($script:UnityExitCode).
+Log: $logFile
+
+$logTail
+"@
+    }
+
     if (-not (Test-Path $builtExe)) {
-        $logTail = if (Test-Path $logFile) {
-            Get-Content $logFile -Tail 40 | Out-String
-        } else {
-            "(log file missing)"
-        }
         throw @"
 Build failed: $builtExe was not produced.
 Unity exit code: $script:UnityExitCode
@@ -144,8 +155,18 @@ $logTail
 "@
     }
 
-    if ($script:UnityExitCode -ne 0) {
-        Write-Warning "Unity reported exit code $($script:UnityExitCode), but $builtExe exists; treating build as successful."
+    if (-not $SkipClean) {
+        $exeWrittenUtc = (Get-Item $builtExe).LastWriteTimeUtc
+        if ($exeWrittenUtc -lt $script:BuildStartedUtc) {
+            throw @"
+Build failed: $builtExe was not rebuilt this run (stale artifact from a previous build).
+  exe last modified (UTC): $exeWrittenUtc
+  build started (UTC):     $($script:BuildStartedUtc)
+Log: $logFile
+
+$logTail
+"@
+        }
     }
 
     Measure-Phase 'Post-process' {
