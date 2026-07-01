@@ -104,7 +104,7 @@ Player log (Windows):
 
 ## Release
 
-See [cytoid-lab-v0.1.0.md](releases/cytoid-lab-v0.1.0.md) for GitHub Release notes (update for v0.1.1 when publishing).
+See [cytoid-lab-v0.1.1.md](releases/cytoid-lab-v0.1.1.md) for v0.1.1 release notes (v0.1.0: [cytoid-lab-v0.1.0.md](releases/cytoid-lab-v0.1.0.md)).
 
 ## Related docs
 
