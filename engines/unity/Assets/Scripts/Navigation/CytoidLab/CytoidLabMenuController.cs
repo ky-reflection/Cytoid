@@ -34,6 +34,8 @@ public class CytoidLabMenuController : MonoBehaviour
     private Transform levelListRoot;
     private ScrollRect levelScrollRect;
     private readonly Dictionary<Difficulty, Button> difficultyButtonMap = new Dictionary<Difficulty, Button>();
+    private Button viewportCornerButton;
+    private Text viewportCornerLabel;
     private bool isRefreshingLevelList;
 
     private Level selectedLevel;
@@ -73,8 +75,9 @@ public class CytoidLabMenuController : MonoBehaviour
 
         SetStatus("Initializing...");
         await UniTask.WaitUntil(() => Context.IsInitialized);
-        Context.Player.Settings.HitSound = "none";
-        Context.Player.Settings.RestrictPlayAreaAspectRatio = true;
+        ApplyLabMenuDefaults();
+        CytoidLabShell.ApplyViewportFromSettings();
+        UpdateViewportCornerButton();
         ShowGameErrorIfAny();
         await RefreshLevelList();
         ProcessCommandLineImport();
@@ -84,6 +87,8 @@ public class CytoidLabMenuController : MonoBehaviour
     {
         if (GameEmbedMode.IsBridgeEmbedded) return;
         if (!Context.IsInitialized) return;
+        CytoidLabShell.ApplyViewportFromSettings();
+        UpdateViewportCornerButton();
         RefreshLevelList().Forget();
     }
 
@@ -111,7 +116,7 @@ public class CytoidLabMenuController : MonoBehaviour
         var bgImage = bgGo.AddComponent<Image>();
         bgImage.color = new Color(0.05f, 0.05f, 0.08f, 1f);
 
-        BuildHelpButton(canvas.transform);
+        BuildCornerButtons(canvas.transform);
 
         root = CreateUiObject("Root", canvas.transform).transform;
         var rootRect = root.GetComponent<RectTransform>();
@@ -240,15 +245,92 @@ public class CytoidLabMenuController : MonoBehaviour
         UpdateDifficultyButtons();
     }
 
-    private void BuildHelpButton(Transform parent)
+    private static void ApplyLabMenuDefaults()
     {
-        var go = CreateUiObject("HelpButton", parent);
+        Context.Player.Settings.HitSound = "none";
+        Context.Player.Settings.RestrictPlayAreaAspectRatio = true;
+    }
+
+    private void SelectViewportPreset(string presetId)
+    {
+        CytoidLabShell.ApplyViewportPreset(presetId);
+        UpdateViewportCornerButton();
+        SetViewportStatus();
+    }
+
+    private void SelectViewportSize(string sizeId)
+    {
+        CytoidLabShell.ApplyViewportSize(sizeId);
+        UpdateViewportCornerButton();
+        SetViewportStatus();
+    }
+
+    private void SetViewportStatus()
+    {
+        if (!Context.IsInitialized) return;
+
+        var presetId = CytoidLabShell.NormalizeViewportPresetId(Context.Player.Settings.LabViewportPreset);
+        var sizeId = CytoidLabShell.NormalizeViewportSizeId(Context.Player.Settings.LabViewportSize);
+        var dimensions = CytoidLabShell.FormatViewportDimensions(presetId, sizeId);
+        var sizeLabel = sizeId == CytoidLabShell.ViewportSizeLarge ? "Large" : "Small";
+        SetStatus($"Viewport {presetId} ({sizeLabel}, {dimensions}). Press Start to apply layout.");
+    }
+
+    private void UpdateViewportCornerButton()
+    {
+        if (viewportCornerLabel == null) return;
+
+        var selected = CytoidLabShell.NormalizeViewportPresetId(
+            Context.IsInitialized ? Context.Player.Settings.LabViewportPreset : CytoidLabShell.ViewportPreset16x9);
+        viewportCornerLabel.text = selected;
+
+        if (viewportCornerButton == null) return;
+        var colors = viewportCornerButton.colors;
+        colors.normalColor = new Color(0.22f, 0.34f, 0.52f, 0.95f);
+        viewportCornerButton.colors = colors;
+    }
+
+    private void OpenViewportOverlay()
+    {
+        CytoidLabViewportOverlay.Open(canvas.transform, uiFont, SelectViewportPreset, SelectViewportSize);
+    }
+
+    private void BuildCornerButtons(Transform parent)
+    {
+        const float buttonSize = 40f;
+        const float viewportWidth = 56f;
+        const float spacing = 8f;
+        const float margin = 16f;
+
+        viewportCornerButton = CreateCornerButton(parent, "ViewportCornerButton",
+            new Vector2(-(margin + buttonSize + spacing + viewportWidth) + 20f, -margin),
+            new Vector2(viewportWidth, buttonSize),
+            OpenViewportOverlay, out viewportCornerLabel);
+        viewportCornerLabel.fontSize = 16;
+        viewportCornerLabel.fontStyle = FontStyle.Bold;
+
+        CreateCornerButton(parent, "HelpButton",
+            new Vector2(-margin, -margin),
+            new Vector2(buttonSize, buttonSize),
+            () => CytoidLabHelpOverlay.Open(canvas.transform, uiFont),
+            out var helpLabel);
+        helpLabel.text = "?";
+        helpLabel.fontSize = 24;
+        helpLabel.fontStyle = FontStyle.Bold;
+
+        UpdateViewportCornerButton();
+    }
+
+    private Button CreateCornerButton(Transform parent, string name, Vector2 anchoredPosition, Vector2 size,
+        UnityEngine.Events.UnityAction onClick, out Text label)
+    {
+        var go = CreateUiObject(name, parent);
         var rect = go.GetComponent<RectTransform>();
         rect.anchorMin = new Vector2(1, 1);
         rect.anchorMax = new Vector2(1, 1);
         rect.pivot = new Vector2(1, 1);
-        rect.anchoredPosition = new Vector2(-16, -16);
-        rect.sizeDelta = new Vector2(40, 40);
+        rect.anchoredPosition = anchoredPosition;
+        rect.sizeDelta = size;
 
         var image = go.AddComponent<Image>();
         image.color = new Color(0.22f, 0.34f, 0.52f, 0.95f);
@@ -258,7 +340,7 @@ public class CytoidLabMenuController : MonoBehaviour
         colors.highlightedColor = new Color(0.32f, 0.48f, 0.72f);
         colors.pressedColor = new Color(0.16f, 0.24f, 0.38f);
         btn.colors = colors;
-        btn.onClick.AddListener(() => CytoidLabHelpOverlay.Open(canvas.transform, uiFont));
+        btn.onClick.AddListener(onClick);
         CytoidLabUiInput.DisableKeyboardNavigation(btn);
 
         var labelGo = CreateUiObject("Label", go.transform);
@@ -266,13 +348,12 @@ public class CytoidLabMenuController : MonoBehaviour
         labelRect.anchorMin = Vector2.zero;
         labelRect.anchorMax = Vector2.one;
         labelRect.sizeDelta = Vector2.zero;
-        var label = labelGo.AddComponent<Text>();
+        label = labelGo.AddComponent<Text>();
         label.font = uiFont;
-        label.text = "?";
-        label.fontSize = 24;
-        label.fontStyle = FontStyle.Bold;
         label.alignment = TextAnchor.MiddleCenter;
         label.color = Color.white;
+
+        return btn;
     }
 
     private static GameObject CreateUiObject(string name, Transform parent)
@@ -640,6 +721,7 @@ public class CytoidLabMenuController : MonoBehaviour
 
         SetStatus("Starting game...");
         Context.GameErrorState = null;
+        CytoidLabShell.ApplyViewportFromSettings();
         GameLaunchBridge.StartDebugGame(selectedLevel, selectedDifficulty, new List<Mod> { Mod.Auto });
     }
 

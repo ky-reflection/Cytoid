@@ -151,6 +151,7 @@ public class CytoidLabHelpOverlay : MonoBehaviour
         scroll.viewport = viewport.GetComponent<RectTransform>();
 
         AddSection(content.transform, font, "About", GetAboutText());
+        AddSection(content.transform, font, "Level menu", GetMenuText());
         AddSection(content.transform, font, "Keyboard (in-game)", GetKeyboardText());
         AddSection(content.transform, font, "Timeline", GetTimelineText());
         AddSection(content.transform, font, "In-game HUD", GetHudText());
@@ -262,11 +263,18 @@ public class CytoidLabHelpOverlay : MonoBehaviour
                + "It runs the Unity gameplay core in a standalone window — not a replacement for the main Cytoid app.";
     }
 
+    private static string GetMenuText()
+    {
+        return "Top-right Viewport button (left of ?) — aspect 16:9 or 4:3; size Small (1280 wide, default) or Large (1920 wide). "
+               + "Example: 16:9 Small = 1280×720, 16:9 Large = 1920×1080. Changes the window size; press Start to apply note/storyboard layout.\n"
+               + "Play area is restricted to 4:3–16:9 by default (same as the main app).";
+    }
+
     private static string GetKeyboardText()
     {
         return "Space — Play / Pause\n"
                + "Esc — Play / Pause (windowed), or exit fullscreen\n"
-               + "F11 — Toggle fullscreen";
+               + "F11 — Toggle fullscreen (uses monitor aspect; windowed mode restores Viewport preset)";
     }
 
     private static string GetTimelineText()
@@ -280,6 +288,7 @@ public class CytoidLabHelpOverlay : MonoBehaviour
     {
         return "Move the pointer to the top or bottom edge to reveal controls.\n"
                + "Auto — autoplay chart; Hitsound — toggle hit sound; IDs — note id overlay.\n"
+               + "End — skip end: fast fade and exit when chart clears (default On). Off plays out music and post-chart storyboard.\n"
                + "Reset — reload the playfield; Back — return to level menu.";
     }
 

@@ -361,4 +361,16 @@ public partial class Game
             }
         }
     }
+
+    private partial bool TryGetLiveSkipMusicOnCompletion(out bool skipMusicOnCompletion)
+    {
+        if (CytoidLabShell.IsActive)
+        {
+            skipMusicOnCompletion = Context.Player.Settings.SkipMusicOnCompletion;
+            return true;
+        }
+
+        skipMusicOnCompletion = false;
+        return false;
+    }
 }

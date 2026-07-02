@@ -11,6 +11,20 @@ public class CytoidLabShell : MonoBehaviour
     public const int PlayAreaWidth = 1280;
     public const int PlayAreaHeight = 720;
 
+    public const string ViewportPreset16x9 = "16:9";
+    public const string ViewportPreset4x3 = "4:3";
+
+    public const int Viewport16x9Width = 1280;
+    public const int Viewport16x9Height = 720;
+    public const int Viewport4x3Width = 1280;
+    public const int Viewport4x3Height = 960;
+    public const int ViewportLargeWidth = 1920;
+    public const int ViewportLarge16x9Height = 1080;
+    public const int ViewportLarge4x3Height = 1440;
+
+    public const string ViewportSizeSmall = "small";
+    public const string ViewportSizeLarge = "large";
+
     /// <summary>Overlay top chrome height at <see cref="PlayAreaHeight"/> reference.</summary>
     public const float TopHudOverlayHeightPx = 40f;
 
@@ -24,6 +38,9 @@ public class CytoidLabShell : MonoBehaviour
     public static int CurrentPlayAreaHeight { get; private set; } = PlayAreaHeight;
     public static int CurrentWindowWidth { get; private set; } = PlayAreaWidth;
     public static int CurrentWindowHeight { get; private set; } = PlayAreaHeight;
+
+    public static string CurrentViewportPresetId { get; private set; } = ViewportPreset16x9;
+    public static string CurrentViewportSizeId { get; private set; } = ViewportSizeSmall;
 
     public static bool IsActive =>
         !GameEmbedMode.IsBridgeEmbedded &&
@@ -78,9 +95,107 @@ public class CytoidLabShell : MonoBehaviour
         lastObservedScreenHeight = CurrentWindowHeight;
     }
 
+    public static void ApplyViewportPreset(string presetId, bool persist = true)
+    {
+        if (!IsActive) return;
+
+        var sizeId = ResolveStoredViewportSizeId();
+        ApplyViewport(presetId, sizeId, persist);
+    }
+
+    public static void ApplyViewportSize(string sizeId, bool persist = true)
+    {
+        if (!IsActive) return;
+
+        var presetId = ResolveStoredViewportPresetId();
+        ApplyViewport(presetId, sizeId, persist);
+    }
+
+    public static void ApplyViewportFromSettings()
+    {
+        if (!IsActive || !Context.IsInitialized || Context.Player?.Settings == null) return;
+
+        ApplyViewport(Context.Player.Settings.LabViewportPreset, Context.Player.Settings.LabViewportSize, persist: false);
+    }
+
+    public static string NormalizeViewportPresetId(string presetId)
+    {
+        return presetId == ViewportPreset4x3 ? ViewportPreset4x3 : ViewportPreset16x9;
+    }
+
+    public static string NormalizeViewportSizeId(string sizeId)
+    {
+        return sizeId == ViewportSizeLarge ? ViewportSizeLarge : ViewportSizeSmall;
+    }
+
+    public static (int width, int height) ResolveViewportDimensions(string presetId, string sizeId)
+    {
+        presetId = NormalizeViewportPresetId(presetId);
+        if (NormalizeViewportSizeId(sizeId) == ViewportSizeLarge)
+        {
+            return presetId == ViewportPreset4x3
+                ? (ViewportLargeWidth, ViewportLarge4x3Height)
+                : (ViewportLargeWidth, ViewportLarge16x9Height);
+        }
+
+        return presetId == ViewportPreset4x3
+            ? (Viewport4x3Width, Viewport4x3Height)
+            : (Viewport16x9Width, Viewport16x9Height);
+    }
+
+    public static string FormatViewportDimensions(string presetId, string sizeId)
+    {
+        var (width, height) = ResolveViewportDimensions(presetId, sizeId);
+        return $"{width}×{height}";
+    }
+
+    private static void ApplyViewport(string presetId, string sizeId, bool persist)
+    {
+        presetId = NormalizeViewportPresetId(presetId);
+        sizeId = NormalizeViewportSizeId(sizeId);
+        CurrentViewportPresetId = presetId;
+        CurrentViewportSizeId = sizeId;
+
+        var (width, height) = ResolveViewportDimensions(presetId, sizeId);
+        ApplyWindowSize(width, height);
+
+        if (persist && Context.IsInitialized && Context.Player?.Settings != null)
+        {
+            Context.Player.Settings.LabViewportPreset = presetId;
+            Context.Player.Settings.LabViewportSize = sizeId;
+        }
+    }
+
+    private static string ResolveStoredViewportPresetId()
+    {
+        if (Context.IsInitialized && Context.Player?.Settings != null)
+        {
+            return NormalizeViewportPresetId(Context.Player.Settings.LabViewportPreset);
+        }
+
+        return CurrentViewportPresetId;
+    }
+
+    private static string ResolveStoredViewportSizeId()
+    {
+        if (Context.IsInitialized && Context.Player?.Settings != null)
+        {
+            return NormalizeViewportSizeId(Context.Player.Settings.LabViewportSize);
+        }
+
+        return CurrentViewportSizeId;
+    }
+
     public static void RestoreWindowedSize()
     {
         if (!IsActive) return;
+
+        if (Context.IsInitialized && Context.Player?.Settings != null)
+        {
+            ApplyViewport(Context.Player.Settings.LabViewportPreset, Context.Player.Settings.LabViewportSize, persist: false);
+            return;
+        }
+
         UnityEngine.Screen.SetResolution(CurrentWindowWidth, CurrentWindowHeight, FullScreenMode.Windowed);
         lastObservedScreenWidth = CurrentWindowWidth;
         lastObservedScreenHeight = CurrentWindowHeight;
@@ -103,15 +218,8 @@ public class CytoidLabShell : MonoBehaviour
     {
         if (!IsActive) return;
 
-        if (appliedGraphicsQuality == quality)
-        {
-            SyncWindowSize();
-            return;
-        }
-
         appliedGraphicsQuality = quality;
-        var (width, height) = GetPlayAreaSizeForQuality(quality);
-        ApplyWindowSize(width, height);
+        SyncWindowSize();
     }
 
     public static (int width, int height) GetPlayAreaSizeForQuality(GraphicsQuality quality)
@@ -175,7 +283,11 @@ public class CytoidLabShell : MonoBehaviour
 
         if (CurrentWindowWidth <= 0 || CurrentWindowHeight <= 0)
         {
-            ApplyWindowSize();
+            ApplyViewportFromSettings();
+            if (CurrentWindowWidth <= 0 || CurrentWindowHeight <= 0)
+            {
+                ApplyWindowSize();
+            }
         }
         else
         {

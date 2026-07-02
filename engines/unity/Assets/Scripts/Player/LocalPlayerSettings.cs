@@ -104,6 +104,12 @@ public class LocalPlayerSettings
     [JsonProperty("skip_music_on_completion")]
     public bool SkipMusicOnCompletion { get; set; } = true;
 
+    [JsonProperty("lab_viewport_preset")]
+    public string LabViewportPreset { get; set; } = "16:9";
+
+    [JsonProperty("lab_viewport_size")]
+    public string LabViewportSize { get; set; } = "small";
+
     [JsonProperty("graphics_quality")]
     public GraphicsQuality GraphicsQuality { get; set; } =
         Application.platform == RuntimePlatform.Android ? GraphicsQuality.Medium : GraphicsQuality.High;

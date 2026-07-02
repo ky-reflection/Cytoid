@@ -24,6 +24,7 @@ public class CytoidLabHudController : MonoBehaviour
     private Button autoButton;
     private Button hitSoundButton;
     private Button noteIdsButton;
+    private Button skipEndButton;
     private Transform topBar;
     private Transform bottomBar;
     private Transform versionLabel;
@@ -208,6 +209,7 @@ public class CytoidLabHudController : MonoBehaviour
         UpdateAutoButton();
         UpdateHitSoundButton();
         UpdateNoteIdsButton();
+        UpdateSkipEndButton();
     }
 
     private void OnGameStarted()
@@ -288,6 +290,12 @@ public class CytoidLabHudController : MonoBehaviour
         noteIdsColors.normalColor = new Color(0.25f, 0.25f, 0.3f);
         noteIdsButton.colors = noteIdsColors;
 
+        skipEndButton = CreateButton(topBar, "End: On", () => ToggleSkipEnd());
+        skipEndButton.GetComponent<LayoutElement>().preferredWidth = 64;
+        var skipEndColors = skipEndButton.colors;
+        skipEndColors.normalColor = new Color(0.25f, 0.25f, 0.3f);
+        skipEndButton.colors = skipEndColors;
+
         fullscreenButton = CreateButton(topBar, "Fullscreen", () => ToggleFullscreen());
         fullscreenButton.GetComponent<LayoutElement>().preferredWidth = 90;
 
@@ -299,7 +307,7 @@ public class CytoidLabHudController : MonoBehaviour
 
         statusText = CreateText(topBar, "", 14, TextAnchor.MiddleRight);
         statusText.color = new Color(1, 0.6f, 0.3f);
-        statusText.GetComponent<LayoutElement>().preferredWidth = 200;
+        statusText.GetComponent<LayoutElement>().preferredWidth = 160;
 
         // Top-right version watermark (follows top bar auto-hide)
         versionLabel = CreateUiObject("Version", root).transform;
@@ -690,6 +698,26 @@ public class CytoidLabHudController : MonoBehaviour
         var colors = noteIdsButton.colors;
         colors.normalColor = enabled ? new Color(0.55f, 0.45f, 0.2f) : new Color(0.25f, 0.25f, 0.3f);
         noteIdsButton.colors = colors;
+    }
+
+    private void ToggleSkipEnd()
+    {
+        var enabled = !Context.Player.Settings.SkipMusicOnCompletion;
+        Context.Player.Settings.SkipMusicOnCompletion = enabled;
+        UpdateSkipEndButton();
+        SetStatus(enabled ? "Skip end enabled." : "Skip end disabled — music will play out.");
+    }
+
+    private void UpdateSkipEndButton()
+    {
+        if (skipEndButton == null) return;
+
+        var enabled = Context.Player.Settings.SkipMusicOnCompletion;
+        var text = skipEndButton.GetComponentInChildren<Text>();
+        if (text != null) text.text = enabled ? "End: On" : "End: Off";
+        var colors = skipEndButton.colors;
+        colors.normalColor = enabled ? new Color(0.2f, 0.7f, 0.3f) : new Color(0.25f, 0.25f, 0.3f);
+        skipEndButton.colors = colors;
     }
 
     private void UpdatePlayPauseLabel()

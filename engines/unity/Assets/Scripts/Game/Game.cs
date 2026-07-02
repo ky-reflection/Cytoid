@@ -729,7 +729,7 @@ public partial class Game : MonoBehaviour
         if (State.IsCompleted || State.IsFailed) return;
         print("Game completed");
 
-        if (skipMusic == null) skipMusic = Chart.SkipMusicOnCompletion;
+        if (skipMusic == null) skipMusic = ResolveSkipMusicOnCompletion();
 
         State.IsCompleted = true;
 
@@ -799,6 +799,18 @@ public partial class Game : MonoBehaviour
 
         sceneLoader.Activate();
     }
+
+    private bool ResolveSkipMusicOnCompletion()
+    {
+        if (TryGetLiveSkipMusicOnCompletion(out var live))
+        {
+            return live;
+        }
+
+        return Chart.SkipMusicOnCompletion;
+    }
+
+    private partial bool TryGetLiveSkipMusicOnCompletion(out bool skipMusicOnCompletion);
 
     public virtual void Dispose()
     {
