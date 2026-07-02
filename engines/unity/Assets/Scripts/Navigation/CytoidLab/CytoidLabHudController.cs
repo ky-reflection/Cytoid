@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -24,12 +25,14 @@ public class CytoidLabHudController : MonoBehaviour
     private Button autoButton;
     private Button hitSoundButton;
     private Button noteIdsButton;
+    private Button repairVideoButton;
     private Transform topBar;
     private Transform bottomBar;
     private Transform versionLabel;
     private bool isSliderInteracting;
     private bool sliderDidDrag;
     private bool isResyncing;
+    private bool isRepairingVideos;
     private bool wasPlayingBeforeDrag;
     private float topHudVisibility;
     private float bottomHudVisibility;
@@ -84,6 +87,7 @@ public class CytoidLabHudController : MonoBehaviour
         game.onGameFailed.AddListener(_ => UpdatePlayPauseLabel());
         game.onGameAborted.AddListener(_ => Destroy(gameObject));
         game.onGameDisposed.AddListener(_ => Destroy(gameObject));
+        CytoidLabVideoRepair.StalledVideoDetected += OnVideoStalled;
 
         try
         {
@@ -94,6 +98,11 @@ public class CytoidLabHudController : MonoBehaviour
         {
             Debug.LogError($"[CytoidLab] Failed to build HUD: {e}");
         }
+    }
+
+    private void OnDestroy()
+    {
+        CytoidLabVideoRepair.StalledVideoDetected -= OnVideoStalled;
     }
 
     private void Update()
@@ -266,6 +275,9 @@ public class CytoidLabHudController : MonoBehaviour
 
         var resetButton = CreateButton(topBar, "Reset", HardReloadPlayfield);
         resetButton.GetComponent<LayoutElement>().preferredWidth = 70;
+
+        repairVideoButton = CreateButton(topBar, "Fix Vid", () => RepairVideosFromHud().Forget());
+        repairVideoButton.GetComponent<LayoutElement>().preferredWidth = 68;
 
         playPauseButton = CreateButton(topBar, "Pause", () => TogglePause());
         playPauseButton.GetComponent<LayoutElement>().preferredWidth = 70;
@@ -571,6 +583,97 @@ public class CytoidLabHudController : MonoBehaviour
 
         game.HardReloadPlayfield();
         SetStatus("Reloading...");
+    }
+
+    private void OnVideoStalled(CytoidLabVideoStallReport report)
+    {
+        if (report == null || isRepairingVideos || game == null || !game.IsLoaded) return;
+        if (!IsCurrentLevelPath(report.VideoPath)) return;
+
+        SetStatus($"Video stalled: {Path.GetFileName(report.VideoPath)}. Repairing...");
+        RepairVideosFromHud().Forget();
+    }
+
+    private async UniTask RepairVideosFromHud()
+    {
+        if (isRepairingVideos)
+        {
+            SetStatus("Video repair already running.");
+            return;
+        }
+
+        if (game == null || !game.IsLoaded || game.Level == null)
+        {
+            SetStatus("No loaded level to repair.");
+            return;
+        }
+
+        isRepairingVideos = true;
+        if (repairVideoButton != null) repairVideoButton.interactable = false;
+
+        try
+        {
+            if (game.State != null && game.State.IsPlaying)
+            {
+                game.Pause();
+            }
+
+            var result = await CytoidLabVideoRepair.RepairLevelVideosAsync(game.Level.Path, SetStatus);
+            if (!result.Success)
+            {
+                SetStatus($"Video repair failed: {result.Message}");
+                return;
+            }
+
+            Debug.Log($"[CytoidLab] Video repair completed: {result.Message}");
+            SetStatus($"{result.RepairedCount} video(s) repaired. Reloading...");
+            game.HardReloadPlayfield();
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[CytoidLab] Video repair failed: {e}");
+            SetStatus($"Video repair failed: {e.Message}");
+        }
+        finally
+        {
+            isRepairingVideos = false;
+            if (repairVideoButton != null) repairVideoButton.interactable = true;
+            UpdatePlayPauseLabel();
+        }
+    }
+
+    private bool IsCurrentLevelPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || game?.Level == null) return false;
+
+        try
+        {
+            var levelPath = game.Level.Path;
+            string levelDirectory;
+            if (Directory.Exists(levelPath))
+            {
+                levelDirectory = Path.GetFullPath(levelPath);
+            }
+            else if (File.Exists(levelPath))
+            {
+                levelDirectory = Path.GetDirectoryName(Path.GetFullPath(levelPath));
+            }
+            else
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(levelDirectory)) return false;
+
+            var fullPath = Path.GetFullPath(path);
+            return fullPath.StartsWith(
+                levelDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void TogglePause()

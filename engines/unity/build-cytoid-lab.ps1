@@ -7,7 +7,8 @@ param(
     [switch]$Package,
     [switch]$KeepLog,
     [switch]$SkipClean,
-    [switch]$Run
+    [switch]$Run,
+    [string]$FfmpegLitePath
 )
 
 $ErrorActionPreference = "Stop"
@@ -175,6 +176,36 @@ $logTail
             $_.Name -like "*DoNotShip*" -or
             $_.Name -like "*BackUpThisFolder_ButDontShipItWithYourGame*"
         } | Remove-Item -Recurse -Force
+
+        if (-not [string]::IsNullOrWhiteSpace($FfmpegLitePath)) {
+            $resolvedFfmpegLitePath = [System.IO.Path]::GetFullPath($FfmpegLitePath)
+            $ffmpegExe = if (Test-Path $resolvedFfmpegLitePath -PathType Container) {
+                Join-Path $resolvedFfmpegLitePath "ffmpeg.exe"
+            } else {
+                $resolvedFfmpegLitePath
+            }
+
+            if (-not (Test-Path $ffmpegExe -PathType Leaf)) {
+                throw "ffmpeg-lite executable was not found at: $ffmpegExe"
+            }
+
+            $ffmpegLiteOutput = Join-Path $OutputPath "ffmpeg-lite"
+            if (Test-Path $ffmpegLiteOutput) {
+                Remove-Item -LiteralPath $ffmpegLiteOutput -Recurse -Force
+            }
+            New-Item -ItemType Directory -Force -Path $ffmpegLiteOutput | Out-Null
+            Copy-Item -LiteralPath $ffmpegExe -Destination (Join-Path $ffmpegLiteOutput "ffmpeg.exe") -Force
+
+            $sourceDirectory = Split-Path -Parent $ffmpegExe
+            foreach ($name in @("build-info.txt", "licenses")) {
+                $sourcePath = Join-Path $sourceDirectory $name
+                if (Test-Path $sourcePath) {
+                    Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $ffmpegLiteOutput $name) -Recurse -Force
+                }
+            }
+
+            Write-Info "Bundled optional ffmpeg-lite: $ffmpegLiteOutput"
+        }
 
         if (-not $KeepLog -and (Test-Path $logFile)) {
             Remove-Item -Force $logFile

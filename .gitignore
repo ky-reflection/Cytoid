@@ -9,6 +9,8 @@ engines/unity/UpgradeLog.htm
 # Cytoid Lab local builds
 engines/unity/Builds/CytoidLab/
 engines/unity/Builds/CytoidLab.zip
+tools/ffmpeg-lite/.build/
+tools/ffmpeg-lite/artifacts/
 
 # Local scratch notes (not committed)
 docs/scratch/
