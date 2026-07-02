@@ -59,7 +59,7 @@ namespace Cytoid.Storyboard
             timer.Time("Controller");
             timer.Time();
 
-            SyncAllVideoPlayback();
+            SyncAllVideoPlayback(forceTimelineSync: true);
         }
     }
 }

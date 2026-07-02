@@ -16,6 +16,7 @@ docs/scratch/
 # Local PowerShell helper scripts (Unix equivalents are tracked)
 engines/unity/flutter_plugin/tool/*.ps1
 tools/vendor/*.ps1
+tools/ffmpeg-lite
 
 # Flutter generated plugin registrants
 engines/unity/flutter_plugin/example/linux/flutter/generated_plugin_registrant.*

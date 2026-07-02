@@ -20,6 +20,10 @@ namespace Cytoid.Storyboard.Videos
 
         public Canvas Canvas { get; private set; }
 
+        private bool mediaPrepared;
+        private bool timelineSyncedBeforePlayback;
+        private float videoTimelineStartTime = float.NaN;
+
         public override Transform Transform => RectTransform;
 
         public override bool IsOnCanvas => true;
@@ -29,6 +33,41 @@ namespace Cytoid.Storyboard.Videos
         }
 
         public override StoryboardRendererEaser<VideoState> CreateEaser() => new VideoEaser(this);
+
+        private float GetVideoTimelineStartTime()
+        {
+            if (!float.IsNaN(videoTimelineStartTime)) return videoTimelineStartTime;
+
+            foreach (var state in Component.States)
+            {
+                if (state.Time < float.MaxValue)
+                {
+                    videoTimelineStartTime = state.Time;
+                    return videoTimelineStartTime;
+                }
+            }
+
+            videoTimelineStartTime = Component.States.Count > 0 ? Component.States[0].Time : 0f;
+            return videoTimelineStartTime;
+        }
+
+        private float GetTimelineElapsed()
+        {
+            return MainRenderer.Time - GetVideoTimelineStartTime();
+        }
+
+        private void ConfigureVideoPlayer(string url)
+        {
+            VideoPlayer.playOnAwake = false;
+            VideoPlayer.waitForFirstFrame = true;
+            VideoPlayer.skipOnDrop = false;
+            VideoPlayer.audioOutputMode = VideoAudioOutputMode.None;
+            VideoPlayer.source = VideoSource.Url;
+            VideoPlayer.url = url;
+            VideoPlayer.aspectRatio = VideoAspectRatio.FitOutside;
+            VideoPlayer.renderMode = VideoRenderMode.RenderTexture;
+            VideoPlayer.targetTexture = RenderTexture;
+        }
 
         public override async UniTask Initialize()
         {
@@ -40,73 +79,119 @@ namespace Cytoid.Storyboard.Videos
                 RenderTexture = targetRenderer.RenderTexture;
                 RectTransform = targetRenderer.RectTransform;
                 Canvas = targetRenderer.Canvas;
+                mediaPrepared = targetRenderer.mediaPrepared;
+                timelineSyncedBeforePlayback = targetRenderer.timelineSyncedBeforePlayback;
+                videoTimelineStartTime = targetRenderer.videoTimelineStartTime;
+                return;
             }
-            else
+
+            VideoPlayer = Instantiate(Provider.VideoVideoPlayerPrefab);
+            RawImage = Instantiate(Provider.VideoRawImagePrefab, Provider.Canvas.transform);
+            RenderTexture = new RenderTexture(UnityEngine.Screen.width / 2, UnityEngine.Screen.height / 2, 0, RenderTextureFormat.ARGB32);
+            RenderTexture.Create();
+            RectTransform = RawImage.rectTransform;
+            Canvas = RawImage.GetComponent<Canvas>();
+            Canvas.overrideSorting = true;
+            Canvas.sortingLayerName = "Storyboard2";
+
+            Clear();
+
+            var videoPath = Component.States[0].Path;
+            if (videoPath == null && Component.States.Count > 1) videoPath = Component.States[1].Path;
+            if (videoPath == null)
             {
-                VideoPlayer = Instantiate(Provider.VideoVideoPlayerPrefab);
-                RawImage = Instantiate(Provider.VideoRawImagePrefab, Provider.Canvas.transform);
-                RenderTexture = new RenderTexture(UnityEngine.Screen.width / 2, UnityEngine.Screen.height / 2, 0, RenderTextureFormat.ARGB32);
-                RectTransform = RawImage.rectTransform;
-                Canvas = RawImage.GetComponent<Canvas>();
-                Canvas.overrideSorting = true;
-                Canvas.sortingLayerName = "Storyboard1";
-
-                Clear();
-
-                var videoPath = Component.States[0].Path;
-                if (videoPath == null && Component.States.Count > 1) videoPath = Component.States[1].Path;
-                if (videoPath == null)
-                {
-                    throw new InvalidOperationException("Video does not have a valid path");
-                }
-                VideoPlayer.gameObject.name = RawImage.gameObject.name = $"$Video[{videoPath}]";
-
-                var prefix = "file://";
-                if (Application.platform == RuntimePlatform.Android && Context.AndroidVersionCode >= 29)
-                {
-                    Debug.Log("Detected Android 29 or above. Performing magic...");
-                    prefix = ""; // Android Q Unity issue
-                    VideoPlayer.source = VideoSource.Url;
-                }
-                var path = MainRenderer.Game.UsesExternalContent
-                    ? GameLaunchVfs.ResolveRequiredFilePath(
-                        MainRenderer.Game.Level.Path,
-                        videoPath,
-                        "storyboard.video.path")
-                    : MainRenderer.Game.Level.Path + videoPath;
-                path = prefix + path;
-                VideoPlayer.url = path;
-                VideoPlayer.aspectRatio = VideoAspectRatio.FitOutside;
-                VideoPlayer.renderMode = VideoRenderMode.RenderTexture;
-                VideoPlayer.targetTexture = RenderTexture;
-                RawImage.texture = RenderTexture;
-
-                var prepareCompleted = false;
-                VideoPlayer.prepareCompleted += _ => prepareCompleted = true;
-                VideoPlayer.Prepare();
-                var startTime = DateTimeOffset.UtcNow;
-                await UniTask.WaitUntil(() => prepareCompleted || DateTimeOffset.UtcNow - startTime > TimeSpan.FromSeconds(5));
-                if (!prepareCompleted)
-                {
-                    Debug.Log($"Android version code: {Context.AndroidVersionCode}");
-                    Debug.Log($"Video path: {path}");
-                    Debug.LogError("Could not load video. Are you using Android Q or above?");
-                }
+                throw new InvalidOperationException("Video does not have a valid path");
             }
+
+            VideoPlayer.gameObject.name = RawImage.gameObject.name = $"$Video[{videoPath}]";
+
+            var levelPath = MainRenderer.Game.Level.Path;
+            var videoFilePath = GameLaunchVfs.ResolveRequiredFilePath(
+                levelPath,
+                videoPath,
+                "storyboard.video.path");
+
+            var useRawAndroidPath = Application.platform == RuntimePlatform.Android && Context.AndroidVersionCode >= 29;
+            var playerUrl = useRawAndroidPath ? videoFilePath : GameLaunchVfs.ToFileUri(videoFilePath);
+
+            ConfigureVideoPlayer(playerUrl);
+            RawImage.texture = RenderTexture;
+
+            mediaPrepared = await PrepareCurrentUrlAsync();
+        }
+
+        private async UniTask<bool> PrepareCurrentUrlAsync()
+        {
+            var prepareCompleted = false;
+            string prepareError = null;
+
+            void OnPrepareCompleted(VideoPlayer _) => prepareCompleted = true;
+
+            void OnErrorReceived(VideoPlayer _, string message) => prepareError = message;
+
+            VideoPlayer.prepareCompleted += OnPrepareCompleted;
+            VideoPlayer.errorReceived += OnErrorReceived;
+            VideoPlayer.Prepare();
+
+            var startTime = DateTimeOffset.UtcNow;
+            await UniTask.WaitUntil(() => prepareCompleted || prepareError != null ||
+                                          DateTimeOffset.UtcNow - startTime > TimeSpan.FromSeconds(5));
+
+            VideoPlayer.prepareCompleted -= OnPrepareCompleted;
+            VideoPlayer.errorReceived -= OnErrorReceived;
+
+            if (!prepareCompleted)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private double ClampVideoTargetTime(double elapsed)
+        {
+            var length = VideoPlayer.length;
+            return length > 0 ? Math.Min(elapsed, Math.Max(0, length - 0.01)) : elapsed;
+        }
+
+        private bool SyncVideoTimeline()
+        {
+            if (VideoPlayer == null || !VideoPlayer.isPrepared || !VideoPlayer.canSetTime) return false;
+
+            var elapsed = GetTimelineElapsed();
+            if (elapsed < 0) return false;
+
+            VideoPlayer.time = ClampVideoTargetTime(elapsed);
+            return true;
+        }
+
+        public void ForceSyncTimeline()
+        {
+            timelineSyncedBeforePlayback |= SyncVideoTimeline();
         }
 
         public override void Clear()
         {
-            VideoPlayer.Stop();
-            RawImage.color = UnityEngine.Color.white.WithAlpha(0);
+            if (VideoPlayer != null)
+            {
+                VideoPlayer.Stop();
+            }
+
+            timelineSyncedBeforePlayback = false;
+
+            if (RawImage != null)
+            {
+                RawImage.color = UnityEngine.Color.white.WithAlpha(0);
+            }
+
             IsTransformActive = false;
         }
 
         public override void Dispose()
         {
-            Destroy(VideoPlayer.gameObject);
-            Destroy(RawImage.gameObject);
-            Destroy(RenderTexture);
+            if (VideoPlayer != null) Destroy(VideoPlayer.gameObject);
+            if (RawImage != null) Destroy(RawImage.gameObject);
+            if (RenderTexture != null) Destroy(RenderTexture);
         }
 
         public override void Update(VideoState fromState, VideoState toState)
@@ -115,19 +200,45 @@ namespace Cytoid.Storyboard.Videos
             SyncPlaybackWithGameState();
         }
 
-        public void SyncPlaybackWithGameState()
+        public void SyncPlaybackWithGameState(bool forceTimelineSync = false)
         {
-            if (VideoPlayer == null || MainRenderer == null) return;
+            if (VideoPlayer == null || MainRenderer == null || !mediaPrepared) return;
 
-            if (!MainRenderer.Game.State.IsPlaying)
+            var gameState = MainRenderer.Game?.State;
+            if (gameState == null) return;
+
+            if (forceTimelineSync)
+            {
+                timelineSyncedBeforePlayback |= SyncVideoTimeline();
+            }
+
+            if (!IsTransformActive)
             {
                 if (VideoPlayer.isPlaying)
                 {
                     VideoPlayer.Pause();
                 }
+
+                return;
             }
-            else if (!VideoPlayer.isPlaying)
+
+            if (!gameState.IsPlaying)
             {
+                if (VideoPlayer.isPlaying)
+                {
+                    VideoPlayer.Pause();
+                }
+
+                return;
+            }
+
+            if (!VideoPlayer.isPlaying)
+            {
+                if (!timelineSyncedBeforePlayback)
+                {
+                    timelineSyncedBeforePlayback = SyncVideoTimeline();
+                }
+
                 VideoPlayer.Play();
             }
         }

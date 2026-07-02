@@ -193,7 +193,7 @@ namespace Cytoid.Storyboard
             Game.onGameUnpaused.AddListener(_ => SyncAllVideoPlayback());
         }
 
-        private void SyncAllVideoPlayback()
+        private void SyncAllVideoPlayback(bool forceTimelineSync = false)
         {
             if (!TypedComponentRenderers.TryGetValue(typeof(Video), out var renderers)) return;
 
@@ -203,7 +203,7 @@ namespace Cytoid.Storyboard
                 if (renderer is not VideoRenderer videoRenderer) continue;
                 var player = videoRenderer.VideoPlayer;
                 if (player == null || !syncedPlayers.Add(player)) continue;
-                videoRenderer.SyncPlaybackWithGameState();
+                videoRenderer.SyncPlaybackWithGameState(forceTimelineSync);
             }
         }
 
