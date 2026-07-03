@@ -22,6 +22,8 @@ public class CytoidLabMenuController : MonoBehaviour
     public const int ButtonFontSize = 20;
     public const float LevelRowHeight = 80f;
 
+    private const string DefaultSelectionHint = "Select a level or import a .cytoidlevel / .zip";
+
     private static readonly Difficulty[] DifficultyOptions = { Difficulty.Easy, Difficulty.Hard, Difficulty.Extreme };
     private static readonly Color DifficultyAvailableColor = new Color(0.25f, 0.35f, 0.55f);
     private static readonly Color DifficultySelectedColor = new Color(0.3f, 0.6f, 1f);
@@ -31,6 +33,7 @@ public class CytoidLabMenuController : MonoBehaviour
     private Canvas canvas;
     private Transform root;
     private Text statusText;
+    private Text selectionHintText;
     private Transform levelListRoot;
     private ScrollRect levelScrollRect;
     private readonly Dictionary<Difficulty, Button> difficultyButtonMap = new Dictionary<Difficulty, Button>();
@@ -136,10 +139,10 @@ public class CytoidLabMenuController : MonoBehaviour
         var title = CreateText(root, $"Cytoid Lab {CytoidLabVersion.DisplayName}", TitleFontSize, TextAnchor.MiddleCenter);
         title.GetComponent<LayoutElement>().preferredHeight = 44;
 
-        var hintText = CreateText(root,
-            "Select a level or import a .cytoidlevel / .zip",
+        selectionHintText = CreateText(root,
+            DefaultSelectionHint,
             HintFontSize, TextAnchor.MiddleCenter);
-        hintText.GetComponent<LayoutElement>().preferredHeight = 22;
+        selectionHintText.GetComponent<LayoutElement>().preferredHeight = 22;
 
         var importButton = CreateButton(root, "Import level", () => ImportLevelFile().Forget());
         importButton.GetComponent<LayoutElement>().preferredHeight = ButtonHeight;
@@ -440,6 +443,31 @@ public class CytoidLabMenuController : MonoBehaviour
 
         selectedDifficulty = difficulty;
         UpdateDifficultyButtons();
+        UpdateSelectionHint();
+    }
+
+    private void UpdateSelectionHint()
+    {
+        if (selectionHintText == null) return;
+
+        if (selectedLevel == null)
+        {
+            selectionHintText.text = selectedDifficulty != null
+                ? $"Select a level ({selectedDifficulty.Id}) or import a .cytoidlevel / .zip"
+                : DefaultSelectionHint;
+            return;
+        }
+
+        var levelLabel = GetLevelTitle(selectedLevel);
+        if (selectedDifficulty != null && LevelHasChart(selectedLevel, selectedDifficulty))
+        {
+            var lv = selectedLevel.Meta.GetDifficultyLevel(selectedDifficulty.Id);
+            selectionHintText.text = $"Selected: {levelLabel} [{selectedDifficulty.Id} {lv}]";
+        }
+        else
+        {
+            selectionHintText.text = $"Selected: {levelLabel} — choose an available difficulty";
+        }
     }
 
     private void UpdateDifficultyButtons()
@@ -507,7 +535,7 @@ public class CytoidLabMenuController : MonoBehaviour
         }
 
         UpdateDifficultyButtons();
-        SetStatus($"Selected: {GetLevelTitle(level)} [{selectedDifficulty.Id} {level.Meta.GetDifficultyLevel(selectedDifficulty.Id)}]");
+        UpdateSelectionHint();
     }
 
     private void OnDeleteLevelClicked(Level level)

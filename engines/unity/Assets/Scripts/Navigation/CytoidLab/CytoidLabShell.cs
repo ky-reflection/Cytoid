@@ -193,9 +193,9 @@ public class CytoidLabShell : MonoBehaviour
         if (Context.IsInitialized && Context.Player?.Settings != null)
         {
             ApplyViewport(Context.Player.Settings.LabViewportPreset, Context.Player.Settings.LabViewportSize, persist: false);
-            return;
         }
 
+        // ApplyWindowSize skips SetResolution while still fullscreen; always force windowed here.
         UnityEngine.Screen.SetResolution(CurrentWindowWidth, CurrentWindowHeight, FullScreenMode.Windowed);
         lastObservedScreenWidth = CurrentWindowWidth;
         lastObservedScreenHeight = CurrentWindowHeight;
