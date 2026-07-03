@@ -1,0 +1,89 @@
+name: Host protocol change request
+description: Propose an intentional v2 host protocol envelope, payload, lifecycle, or error-contract change.
+title: "[Protocol]: "
+labels:
+  - enhancement
+  - protocol
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this only for intentional protocol contract changes. Implementation must keep C#, Dart models, docs/host-protocol-v2.md, and downstream cytoid_flutter docs in sync.
+
+  - type: dropdown
+    id: protocol-area
+    attributes:
+      label: Protocol area
+      options:
+        - Launch payload
+        - Result payload
+        - Session lifecycle
+        - Runtime state / readiness
+        - Active-session runtime failure
+        - Error envelope
+        - Log forwarding
+        - Artifact manifest / readiness
+        - Native bridge callback
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: What host/runtime behavior cannot be represented by the current v2 protocol?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-contract
+    attributes:
+      label: Proposed contract
+      description: Include envelope type, fields, lifecycle transition, error code, or compatibility behavior.
+      placeholder: |
+        Envelope:
+        Direction:
+        Required fields:
+        Optional fields:
+        Backward compatibility:
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example payload or sequence
+      render: json
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility impact
+      description: Mention mock engine, Android/iOS native bridges, Flutter plugin API, artifacts, and existing host behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation checklist
+      description: List expected C#, Dart, documentation, and test changes.
+      placeholder: |
+        - C#:
+        - Dart:
+        - docs/host-protocol-v2.md:
+        - cytoid_flutter docs:
+        - tests / smoke:
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Required checks
+      options:
+        - label: This is an intentional contract change, not just a bug in the current implementation.
+          required: true
+        - label: I identified whether the change is backward compatible.
+          required: true
+        - label: I accounted for C# models, Dart models, protocol docs, and cytoid_flutter docs.
+          required: true

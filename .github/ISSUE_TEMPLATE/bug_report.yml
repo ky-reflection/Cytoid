@@ -1,0 +1,131 @@
+name: Bug report
+description: Report a reproducible problem in the Unity core, Flutter plugin, build tooling, or documentation.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a Cytoid Core issue. Please include enough context for maintainers to reproduce it without guessing which runtime path was used.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Choose the closest owning area.
+      options:
+        - Unity gameplay core
+        - Bridge host protocol
+        - Flutter plugin
+        - Android native bridge
+        - iOS native bridge
+        - Cytoid Lab
+        - Build / CI / artifacts
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime-mode
+    attributes:
+      label: Runtime mode
+      description: Which mode reproduced the issue?
+      options:
+        - Standalone debug in Unity Editor
+        - Bridge-embedded Unity artifact
+        - Flutter plugin mock engine
+        - Cytoid Lab Windows standalone
+        - Unknown / not applicable
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Unity Editor macOS
+        - Unity Editor Windows
+        - Android device
+        - Android emulator
+        - iOS real device
+        - iOS Simulator mock-only
+        - Windows standalone
+        - CI / GameCI
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions / revisions
+      description: Include branch, commit SHA, Unity version, Flutter version, artifact revision, or package version where relevant.
+      placeholder: "branch: main, commit: abc1234, Unity: 6000.0.75f1, Flutter: ..., artifact: ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+      placeholder: "A short description of the failure or regression."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List the exact steps, command/menu entry, scene, sample level, or host message sequence.
+      placeholder: |
+        1. Open ...
+        2. Run ...
+        3. Send ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened? Include screenshots or recordings if the issue is visual.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and diagnostics
+      description: Paste relevant Unity Console, Android logcat, Xcode, Flutter, CI, or bridge event logs. Remove secrets and avoid raw stack traces from user devices when not needed.
+      render: shell
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Mention local-only artifacts, vendor packages, mock-engine scenario, chart files, or anything that may affect reproduction.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked that this issue is not caused by missing local Unity artifacts when testing the real engine.
+          required: false
+        - label: I removed private level files, licensed third-party assets, and secrets from the report.
+          required: true
+        - label: I included the runtime mode and platform where the issue reproduces.
+          required: true

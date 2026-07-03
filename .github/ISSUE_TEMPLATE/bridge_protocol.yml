@@ -1,0 +1,101 @@
+name: Bridge / host protocol issue
+description: Report Flutter-to-Unity messaging, envelopes, lifecycle state, native callbacks, or session result problems.
+title: "[Bridge]: "
+labels:
+  - bug
+  - bridge
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for issues in the v2 engine-agnostic JSON protocol, native bridge, or Flutter plugin session lifecycle. Protocol changes must keep C#, Dart models, and docs in sync.
+
+  - type: dropdown
+    id: direction
+    attributes:
+      label: Message direction / lifecycle area
+      options:
+        - Flutter host to Unity
+        - Unity to Flutter host
+        - Android native callback
+        - iOS native callback
+        - Runtime lifecycle / T3 state
+        - Active-session runtime failure / T4
+        - Artifact readiness / mock fallback
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: envelope
+    attributes:
+      label: Envelope / message type
+      description: Examples include bridge.play.start, game.ready, game.play.result, session.failed, engine.error, bridge.ping.
+      placeholder: "bridge.play.start"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android device
+        - Android emulator
+        - iOS real device
+        - iOS Simulator mock-only
+        - Flutter unit/widget test
+        - Unity Editor
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions / revisions
+      placeholder: "commit, plugin version, artifact manifest revision, Flutter version, Unity version"
+    validations:
+      required: true
+
+  - type: textarea
+    id: payload
+    attributes:
+      label: Minimal payload or event sequence
+      description: Include sanitized JSON envelopes or the smallest message sequence that reproduces the issue.
+      render: json
+
+  - type: textarea
+    id: expected-contract
+    attributes:
+      label: Expected contract behavior
+      description: Reference docs/host-protocol-v2.md if possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-contract
+    attributes:
+      label: Actual behavior
+      description: Describe unexpected envelope, missing event, duplicate event, wrong state transition, or native failure handling.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Include Flutter logs, EventChannel events, Android logcat, Xcode logs, Unity logs, or native exception summary.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked docs/host-protocol-v2.md for the expected behavior.
+          required: true
+        - label: I stated whether the Unity artifact or mock engine was used.
+          required: true
+        - label: I included activeSessionId state when reporting runtime failure behavior.
+          required: false

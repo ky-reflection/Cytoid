@@ -1,0 +1,93 @@
+name: Cytoid Lab issue
+description: Report Windows Lab import, preview, timeline, HUD, or chart-author workflow issues.
+title: "[Lab]: "
+labels:
+  - bug
+  - cytoid-lab
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for Cytoid Lab standalone behavior. For core playback bugs that also reproduce in Unity Editor or Bridge-embedded builds, the Gameplay / chart regression template may be a better fit.
+
+  - type: dropdown
+    id: lab-area
+    attributes:
+      label: Lab area
+      options:
+        - Level import
+        - Chart preview
+        - Timeline seek / scrub
+        - Runtime menu / HUD
+        - Debug overlays
+        - Windows build / launch
+        - Storyboard preview
+        - Video playback
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: build
+    attributes:
+      label: Lab build / branch / commit
+      placeholder: "feature/cytoid-player @ abc1234, Lab v0.1.1, local build ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: level
+    attributes:
+      label: Level or project details
+      description: Include chart format/version, assets used, whether storyboard/video is present, and whether a minimal repro can be shared.
+      placeholder: |
+        Level:
+        Chart format:
+        Uses storyboard/video:
+        Minimal repro available:
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Launch Lab ...
+        2. Import ...
+        3. Seek / preview ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots, recordings, and logs
+      description: Attach captures or paste relevant Lab logs. Do not attach private or licensed assets without permission.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I stated whether the issue is Lab-only or also happens in normal Unity gameplay.
+          required: true
+        - label: I included the timestamp or timeline position if the issue appears during preview.
+          required: false
+        - label: I removed private level files, licensed assets, and secrets from attachments.
+          required: true

@@ -1,0 +1,96 @@
+name: Build / artifact issue
+description: Report Unity export, AAR/XCFramework packaging, Flutter plugin setup, or CI artifact problems.
+title: "[Build]: "
+labels:
+  - build
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for plugin artifact builds, CI workflow failures, local packaging scripts, Unity export paths, or Flutter example setup.
+
+  - type: dropdown
+    id: target
+    attributes:
+      label: Build target
+      options:
+        - Android Unity library export
+        - Android AAR packaging
+        - iOS UnityLibrary export
+        - iOS UnityFramework.xcframework packaging
+        - Flutter plugin example app
+        - GitHub Actions artifact workflow
+        - cytoid_flutter full app integration
+        - Vendor asset installation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Local macOS
+        - Local Windows
+        - GameCI Linux
+        - GitHub Actions macOS
+        - Android Studio / Gradle
+        - Xcode
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Tool versions
+      description: Include Unity, Xcode, Flutter, Gradle/JDK, Android SDK/NDK, or workflow run information as applicable.
+      placeholder: "Unity 6000.0.75f1, Xcode ..., Flutter ..., run id ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command, menu item, or workflow
+      description: Include the exact Unity menu item, batchmode method, script, or workflow inputs.
+      placeholder: "Cytoid -> Build Android Plugin Artifacts / CytoidCoreBuild.ExportAndroidLibraryForFlutter / ./tool/build_unity_aar.sh"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected artifact output
+      description: Which path or artifact should have been produced?
+      placeholder: "engines/unity/flutter_plugin/.cytoid_game_core/artifacts/unity/android/cytoid-unity-core.aar"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Describe missing files, wrong paths, failed packaging, mock fallback, or build failure.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Build logs
+      description: Paste the relevant tail of Unity, Gradle, Xcode, Flutter, or Actions logs.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I verified that generated exports and artifact binaries are not committed.
+          required: true
+        - label: I included whether the issue happens on a clean export/package or only after manual export edits.
+          required: false
+        - label: For iOS Simulator reports, I checked whether the current artifact is device-only and mock fallback is expected.
+          required: false

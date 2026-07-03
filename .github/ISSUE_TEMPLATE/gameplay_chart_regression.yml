@@ -1,0 +1,112 @@
+name: Gameplay / chart regression
+description: Report chart playback, note rendering, scoring, hit detection, audio, storyboard, video, or seek behavior issues.
+title: "[Gameplay]: "
+labels:
+  - bug
+  - gameplay
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for issues that are visible during chart playback or Cytoid Lab preview. If the bug only concerns Flutter/Unity messaging, use the Bridge protocol template instead.
+
+  - type: dropdown
+    id: subsystem
+    attributes:
+      label: Affected subsystem
+      options:
+        - Note rendering
+        - Hit detection / scoring
+        - Audio sync
+        - Scanner / page position
+        - Hold / long hold / drag line
+        - Storyboard
+        - Video background
+        - Timeline seek / resync
+        - Cytoid Lab UI / preview
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime-mode
+    attributes:
+      label: Runtime mode
+      options:
+        - Standalone debug in Unity Editor
+        - Bridge-embedded Unity artifact
+        - Cytoid Lab Windows standalone
+    validations:
+      required: true
+
+  - type: input
+    id: revision
+    attributes:
+      label: Branch / commit / build
+      placeholder: "feature/cytoid-player @ abc1234, Lab v0.1.1, artifact revision ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: chart-info
+    attributes:
+      label: Chart / level information
+      description: Include chart format/version, difficulty, page/function usage, storyboard/video usage, and whether the level can be shared.
+      placeholder: |
+        Level:
+        Chart format:
+        Difficulty:
+        Uses storyboard/video:
+        Can share minimal repro:
+    validations:
+      required: true
+
+  - type: textarea
+    id: timing
+    attributes:
+      label: Timing details
+      description: Note timestamps, page ids, seek position, playback speed, offset, or note ids that expose the issue.
+      placeholder: "At 01:23.456 after seeking from 00:45.000, hold note id ... stays visible ..."
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Load ...
+        2. Seek / play until ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots / recordings / logs
+      description: Attach video captures, screenshots, Unity Console logs, or Lab diagnostics.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I identified whether the issue appears after normal playback, timeline seek, or both.
+          required: true
+        - label: I included enough chart timing information for maintainers to inspect the same moment.
+          required: true
+        - label: I did not attach licensed or private chart assets unless I have permission to share them.
+          required: true

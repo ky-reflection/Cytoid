@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Host protocol documentation
+    url: https://github.com/Cytoid/cytoid-core-unity/blob/main/docs/host-protocol-v2.md
+    about: Read the current Bridge-embedded host protocol contract before filing protocol issues.
+  - name: Flutter plugin artifact setup
+    url: https://github.com/Cytoid/cytoid-core-unity/blob/main/engines/unity/flutter_plugin/README.md
+    about: Check artifact installation, mock-engine fallback, and platform notes before filing setup issues.

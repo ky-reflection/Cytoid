@@ -1,0 +1,74 @@
+name: Feature request / proposal
+description: Propose a focused change to the Unity core, Bridge protocol, Flutter plugin, Cytoid Lab, tooling, or docs.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep proposals scoped. If the change affects the host protocol, C# models, Dart models, and docs/host-protocol-v2.md must be updated together.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Unity gameplay core
+        - Bridge host protocol
+        - Flutter plugin API
+        - Android native integration
+        - iOS native integration
+        - Cytoid Lab
+        - Storyboard tooling
+        - Build / CI / artifacts
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What user, maintainer, chart-author, or integration problem does this solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful behavior or API change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Mention workarounds, mock-engine-only options, Lab-only behavior, or host-orchestrated alternatives.
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and integration impact
+      description: Note effects on runtime modes, scenes, build targets, host protocol payloads, artifact packaging, or cytoid_flutter integration.
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Suggested validation
+      description: Which tests, example app flow, Unity Editor scenario, Lab build, or device smoke should prove this works?
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I kept the request focused and avoided unrelated refactors.
+          required: true
+        - label: I called out whether this requires a host protocol change.
+          required: true
+        - label: I considered mock-engine or host-orchestrated behavior where Unity runtime changes may not be necessary.
+          required: false
