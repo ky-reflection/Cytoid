@@ -49,7 +49,6 @@ public class CytoidLabShell : MonoBehaviour
 
     public static CytoidLabShell Instance { get; private set; }
 
-    private static GraphicsQuality? appliedGraphicsQuality;
     private static int lastObservedScreenWidth;
     private static int lastObservedScreenHeight;
 
@@ -91,8 +90,7 @@ public class CytoidLabShell : MonoBehaviour
             UnityEngine.Screen.SetResolution(CurrentWindowWidth, CurrentWindowHeight, FullScreenMode.Windowed);
         }
 
-        lastObservedScreenWidth = CurrentWindowWidth;
-        lastObservedScreenHeight = CurrentWindowHeight;
+        RecordWindowSize(CurrentWindowWidth, CurrentWindowHeight);
     }
 
     public static void ApplyViewportPreset(string presetId, bool persist = true)
@@ -190,76 +188,33 @@ public class CytoidLabShell : MonoBehaviour
     {
         if (!IsActive) return;
 
-        if (Context.IsInitialized && Context.Player?.Settings != null)
-        {
-            ApplyViewport(Context.Player.Settings.LabViewportPreset, Context.Player.Settings.LabViewportSize, persist: false);
-        }
-
-        // ApplyWindowSize skips SetResolution while still fullscreen; always force windowed here.
+        CaptureWindowSizeFromScreen();
         UnityEngine.Screen.SetResolution(CurrentWindowWidth, CurrentWindowHeight, FullScreenMode.Windowed);
-        lastObservedScreenWidth = CurrentWindowWidth;
-        lastObservedScreenHeight = CurrentWindowHeight;
     }
 
-    public static void SyncWindowSize()
+    /// <summary>
+    /// Adopts the current Screen size as the tracked window size without resizing.
+    /// </summary>
+    public static void CaptureWindowSizeFromScreen()
     {
         if (!IsActive || UnityEngine.Screen.fullScreen) return;
-
-        if (UnityEngine.Screen.width != CurrentWindowWidth || UnityEngine.Screen.height != CurrentWindowHeight)
-        {
-            UnityEngine.Screen.SetResolution(CurrentWindowWidth, CurrentWindowHeight, FullScreenMode.Windowed);
-        }
-
-        lastObservedScreenWidth = CurrentWindowWidth;
-        lastObservedScreenHeight = CurrentWindowHeight;
+        RecordWindowSize(UnityEngine.Screen.width, UnityEngine.Screen.height);
     }
 
     public static void ApplyGraphicsQualityIfNeeded(GraphicsQuality quality)
     {
         if (!IsActive) return;
-
-        appliedGraphicsQuality = quality;
-        SyncWindowSize();
+        CaptureWindowSizeFromScreen();
     }
 
-    public static (int width, int height) GetPlayAreaSizeForQuality(GraphicsQuality quality)
+    private static void RecordWindowSize(int width, int height)
     {
-        int width;
-        int height;
-        switch (quality)
-        {
-            case GraphicsQuality.VeryLow:
-                width = 1024;
-                height = 576;
-                break;
-            case GraphicsQuality.Low:
-                width = PlayAreaWidth;
-                height = PlayAreaHeight;
-                break;
-            case GraphicsQuality.Medium:
-                width = 1366;
-                height = 768;
-                break;
-            case GraphicsQuality.High:
-            case GraphicsQuality.Ultra:
-            default:
-                width = 1920;
-                height = 1080;
-                break;
-        }
-
-        var maxWidth = UnityEngine.Screen.currentResolution.width;
-        var maxHeight = UnityEngine.Screen.currentResolution.height;
-        if (width > maxWidth || height > maxHeight)
-        {
-            width = Mathf.Min(width, maxWidth);
-            height = Mathf.Min(height, maxHeight);
-            var scale = Mathf.Min((float)width / 1920, (float)height / 1080);
-            width = Mathf.Max(PlayAreaWidth, Mathf.RoundToInt(1920 * scale));
-            height = Mathf.Max(PlayAreaHeight, Mathf.RoundToInt(1080 * scale));
-        }
-
-        return (width, height);
+        lastObservedScreenWidth = width;
+        lastObservedScreenHeight = height;
+        CurrentWindowWidth = width;
+        CurrentWindowHeight = height;
+        CurrentPlayAreaWidth = width;
+        CurrentPlayAreaHeight = height;
     }
 
     private void Awake()
@@ -291,7 +246,7 @@ public class CytoidLabShell : MonoBehaviour
         }
         else
         {
-            SyncWindowSize();
+            CaptureWindowSizeFromScreen();
         }
     }
 
@@ -315,19 +270,14 @@ public class CytoidLabShell : MonoBehaviour
         var h = UnityEngine.Screen.height;
         if (w == lastObservedScreenWidth && h == lastObservedScreenHeight) return;
 
-        lastObservedScreenWidth = w;
-        lastObservedScreenHeight = h;
-        CurrentWindowWidth = w;
-        CurrentWindowHeight = h;
-        CurrentPlayAreaWidth = w;
-        CurrentPlayAreaHeight = h;
+        RecordWindowSize(w, h);
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         if (!IsActive) return;
 
-        SyncWindowSize();
+        CaptureWindowSizeFromScreen();
 
         if (scene.name == "Game")
         {
@@ -360,12 +310,12 @@ public class CytoidLabShell : MonoBehaviour
 
     private static void OnGameReadyToLoad(Game game)
     {
-        SyncWindowSize();
+        CaptureWindowSizeFromScreen();
     }
 
     private static void OnGameDisposed(Game game)
     {
-        SyncWindowSize();
+        CaptureWindowSizeFromScreen();
     }
 
     private static void EnsureGameHud()

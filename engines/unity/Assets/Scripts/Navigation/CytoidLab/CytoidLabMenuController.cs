@@ -25,6 +25,7 @@ public class CytoidLabMenuController : MonoBehaviour
     private const string DefaultSelectionHint = "Select a level or import a .cytoidlevel / .zip";
 
     private static readonly Difficulty[] DifficultyOptions = { Difficulty.Easy, Difficulty.Hard, Difficulty.Extreme };
+    private static bool initialViewportApplied;
     private static readonly Color DifficultyAvailableColor = new Color(0.25f, 0.35f, 0.55f);
     private static readonly Color DifficultySelectedColor = new Color(0.3f, 0.6f, 1f);
     private static readonly Color DifficultyUnavailableColor = new Color(0.22f, 0.22f, 0.25f);
@@ -79,7 +80,15 @@ public class CytoidLabMenuController : MonoBehaviour
         SetStatus("Initializing...");
         await UniTask.WaitUntil(() => Context.IsInitialized);
         ApplyLabMenuDefaults();
-        CytoidLabShell.ApplyViewportFromSettings();
+        if (!initialViewportApplied)
+        {
+            CytoidLabShell.ApplyViewportFromSettings();
+            initialViewportApplied = true;
+        }
+        else
+        {
+            CytoidLabShell.CaptureWindowSizeFromScreen();
+        }
         UpdateViewportCornerButton();
         ShowGameErrorIfAny();
         await RefreshLevelList();
@@ -90,7 +99,7 @@ public class CytoidLabMenuController : MonoBehaviour
     {
         if (GameEmbedMode.IsBridgeEmbedded) return;
         if (!Context.IsInitialized) return;
-        CytoidLabShell.ApplyViewportFromSettings();
+        CytoidLabShell.CaptureWindowSizeFromScreen();
         UpdateViewportCornerButton();
         RefreshLevelList().Forget();
     }
@@ -749,7 +758,7 @@ public class CytoidLabMenuController : MonoBehaviour
 
         SetStatus("Starting game...");
         Context.GameErrorState = null;
-        CytoidLabShell.ApplyViewportFromSettings();
+        CytoidLabShell.CaptureWindowSizeFromScreen();
         GameLaunchBridge.StartDebugGame(selectedLevel, selectedDifficulty, new List<Mod> { Mod.Auto });
     }
 
