@@ -103,13 +103,13 @@ public class CytoidLabHudController : MonoBehaviour
 
         if (timeSlider != null && !isSliderInteracting && game.State.IsPlaying)
         {
-            var progress = game.MusicLength > 0 ? game.Music.PlaybackTime / game.MusicLength : 0;
+            var progress = game.MusicLength > 0 ? game.Music.SourceTimeSeconds / game.MusicLength : 0;
             timeSlider.SetValueWithoutNotify(Mathf.Clamp01(progress));
         }
 
         if (timeText != null)
         {
-            var current = game.MusicLength > 0 ? game.Music.PlaybackTime : 0;
+            var current = game.MusicLength > 0 ? game.Music.SourceTimeSeconds : 0;
             var total = game.MusicLength;
             timeText.text = $"{FormatTime(current)} / {FormatTime(total)}";
         }
@@ -641,9 +641,9 @@ public class CytoidLabHudController : MonoBehaviour
         try
         {
             if (Context.Player.Settings.HitSound == "none") return;
-            if (Context.AudioManager.IsLoaded("HitSound")) return;
+            if (Context.AudioManager.IsSfxLoaded("HitSound")) return;
             var resource = await Resources.LoadAsync<AudioClip>("Audio/HitSounds/" + Context.Player.Settings.HitSound);
-            Context.AudioManager.Load("HitSound", resource as AudioClip, isResource: true);
+            Context.AudioManager.LoadSfx("HitSound", resource as AudioClip, isResource: true);
         }
         catch (Exception e)
         {

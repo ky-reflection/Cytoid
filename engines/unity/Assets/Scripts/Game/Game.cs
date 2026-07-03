@@ -63,7 +63,7 @@ public partial class Game : MonoBehaviour
     public float EditorCompletionDelay;
     public bool EditorImmediatelyCompleteFail;
 
-    public AudioManager.Controller Music { get; protected set; }
+    public IMusicTrack Music { get; protected set; }
     private IGameContentProvider contentProvider;
     private bool preserveContentProviderOnDispose;
 
@@ -254,7 +254,7 @@ public partial class Game : MonoBehaviour
         if (Context.AudioManager == null) await UniTask.WaitUntil(() => Context.AudioManager != null);
         Context.AudioManager.Initialize();
         var musicClip = await contentProvider.LoadMusic();
-        Music = Context.AudioManager.Load("Level", musicClip, false, false, true);
+        Music = Context.AudioManager.LoadMusic("Level", musicClip, isResource: false);
         MusicLength = Music.Length;
 
         // Load storyboard
@@ -287,7 +287,7 @@ public partial class Game : MonoBehaviour
         if (Context.Player.Settings.HitSound != "none")
         {
             var resource = await Resources.LoadAsync<AudioClip>("Audio/HitSounds/" + Context.Player.Settings.HitSound);
-            Context.AudioManager.Load("HitSound", resource as AudioClip, isResource: true);
+            Context.AudioManager.LoadSfx("HitSound", resource as AudioClip, isResource: true);
         }
 
         // State & config
@@ -336,15 +336,12 @@ public partial class Game : MonoBehaviour
     {
         await UniTask.WhenAll(BeforeStartTasks);
 
-        MusicStartedTimestamp = Music.PlayScheduled(AudioTrackIndex.Reserved1, 1.0f);
+        if (Application.isEditor && EditorMusicInitialPosition > 0)
+            MusicStartedTimestamp = Music.PlayFrom(EditorMusicInitialPosition, 1.0);
+        else
+            MusicStartedTimestamp = Music.SchedulePlay(1.0);
 
         await UniTask.Delay(TimeSpan.FromSeconds(1));
-
-        if (Application.isEditor && EditorMusicInitialPosition > 0)
-        {
-            Music.PlaybackTime = EditorMusicInitialPosition;
-            MusicStartedTimestamp -= EditorMusicInitialPosition;
-        }
 
         GameStartedOrResumedTimestamp = UnityEngine.Time.realtimeSinceStartup;
         State.IsStarted = true;
@@ -417,13 +414,14 @@ public partial class Game : MonoBehaviour
         }
 
         if (!State.IsFailed && State.ShouldFail) Fail();
+        // BUG: frame-rate-dependent fade, preserved during refactor
         if (State.IsFailed) Music.Volume -= 1f / 60f;
         if (State.IsPlaying)
 
         {
             if (State.ClearCount >= Chart.Model.note_list.Count) Complete();
 
-            if (!State.IsCompleted || !Music.IsFinished())
+            if (!State.IsCompleted || !Music.IsFinished)
             {
                 SynchronizeMusic();
             }
@@ -537,7 +535,7 @@ public partial class Game : MonoBehaviour
         }
         else
         {
-            Context.AudioManager.Get("Navigate2").Play(ignoreDsp: true);
+            Context.AudioManager.GetSfx("Navigate2").Play(ignoreListenerPause: true);
 
             Context.ScreenManager.ChangeScreen(PausedScreen.Id, ScreenTransition.None);
             Context.SetAutoRotation(true);
@@ -615,7 +613,7 @@ public partial class Game : MonoBehaviour
         AudioListener.pause = false;
 
         // Unload resources
-        Context.AudioManager.Unload("Level");
+        Context.AudioManager.UnloadMusic();
 
         onGameAborted.Invoke(this);
 
@@ -654,7 +652,7 @@ public partial class Game : MonoBehaviour
 
         Music?.Stop();
         AudioListener.pause = false;
-        Context.AudioManager.Unload("Level");
+        Context.AudioManager.UnloadMusic();
 
         onGameAborted.Invoke(this);
         if (emitCalibrationResult && shouldEmitCalibrationResult)
@@ -674,7 +672,7 @@ public partial class Game : MonoBehaviour
 
                 var tierPlaySession = TierPlaySession;
                 Music.Stop();
-                Context.AudioManager.Unload("Level");
+                Context.AudioManager.UnloadMusic();
                 AudioListener.pause = false;
                 onGameRetried.Invoke(this);
                 Dispose();
@@ -692,7 +690,7 @@ public partial class Game : MonoBehaviour
         print("Game retried");
 
         // Unload resources
-        Context.AudioManager.Unload("Level");
+        Context.AudioManager.UnloadMusic();
         AudioListener.pause = false;
 
         onGameRetried.Invoke(this);
@@ -719,7 +717,7 @@ public partial class Game : MonoBehaviour
         inputController.DisableInput();
 
         Context.ScreenManager.ChangeScreen(FailedScreen.Id, ScreenTransition.None);
-        Context.AudioManager.Get("LevelFailed").Play();
+        Context.AudioManager.GetSfx("LevelFailed").Play();
 
         onGameFailed.Invoke(this);
     }
@@ -744,7 +742,7 @@ public partial class Game : MonoBehaviour
             var volume = Music.Volume * 3f;
 
             // Wait for audio to finish
-            var remainingLength = MusicLength - Music.PlaybackTime;
+            var remainingLength = MusicLength - Music.SourceTimeSeconds;
             var startTime = DateTime.Now;
             await UniTask.WaitUntil(() =>
             {
@@ -756,11 +754,11 @@ public partial class Game : MonoBehaviour
                         Music.Volume = Math.Min(maxVolume, volume);
                     }
 
-                    return Music.IsFinished() || volume <= 0;
+                    return Music.IsFinished || volume <= 0;
                 }
                 else
                 {
-                    return Music.IsFinished() ||
+                    return Music.IsFinished ||
                            DateTime.Now - startTime > TimeSpan.FromSeconds(remainingLength); // Just as a fail-safe
                 }
             });
@@ -769,7 +767,7 @@ public partial class Game : MonoBehaviour
         State.IsReadyToExit = true;
 
         print("Audio ended");
-        Context.AudioManager.Unload("Level");
+        Context.AudioManager.UnloadMusic();
 
         try
         {

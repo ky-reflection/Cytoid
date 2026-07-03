@@ -245,9 +245,9 @@ public partial class DragHeadNote : Note
     public override void PlayHitSound()
     {
         if (Context.Player.Settings.HitSound == "none") return;
-        if (Context.AudioManager.IsLoaded("HitSound"))
+        if (Context.AudioManager.IsSfxLoaded("HitSound"))
         {
-            Context.AudioManager.Get("HitSound").Play();
+            Context.AudioManager.GetSfx("HitSound").Play();
         }
         Context.Haptic(HapticTypes.Selection, false);
     }

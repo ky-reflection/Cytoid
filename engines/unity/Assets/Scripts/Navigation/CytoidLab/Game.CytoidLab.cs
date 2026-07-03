@@ -31,11 +31,7 @@ public partial class Game
         // Drag preview: light resync (visual-only). Full rebuild on slider release.
         SuppressTimelineGameplayMutations = true;
         targetTime = Mathf.Clamp(targetTime, 0, MusicLength);
-        Music.Stop();
-        Music.PlaybackTime = targetTime;
-
-        var nowDspTime = AudioSettings.dspTime;
-        MusicStartedTimestamp = nowDspTime - targetTime;
+        MusicStartedTimestamp = Music.PlayFrom(targetTime, 0);
         Time = targetTime;
         MusicProgress = MusicLength > 0 ? Time / MusicLength : 0;
         ChartProgress = ChartLength > 0 ? Time / ChartLength : 0;
@@ -47,7 +43,6 @@ public partial class Game
         RefreshSpawnedHoldProgress(targetTime);
         RefreshSpawnedDragVisualState(targetTime, visualPreviewOnly: true);
 
-        Music.Play(AudioTrackIndex.Reserved1);
         onGameUpdate.Invoke(this);
         onGameLateUpdate.Invoke(this);
     }
@@ -80,11 +75,7 @@ public partial class Game
             State.IsPlaying = false;
             AudioListener.pause = true;
 
-            Music.Stop();
-            Music.PlaybackTime = targetTime;
-
-            var nowDspTime = AudioSettings.dspTime;
-            MusicStartedTimestamp = nowDspTime - targetTime;
+            MusicStartedTimestamp = Music.PlayFrom(targetTime, 0);
 
             Time = targetTime;
             MusicProgress = MusicLength > 0 ? Time / MusicLength : 0;
@@ -114,7 +105,6 @@ public partial class Game
                 }
             }
 
-            Music.Play(AudioTrackIndex.Reserved1);
             if (wasPlaying)
             {
                 GameStartedOrResumedTimestamp = UnityEngine.Time.realtimeSinceStartup;
