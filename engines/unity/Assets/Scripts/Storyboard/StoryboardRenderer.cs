@@ -89,7 +89,8 @@ namespace Cytoid.Storyboard
 
             if (Provider.CanvasGroup != null) Provider.CanvasGroup.alpha = 1f;
             if (Provider.UiCanvasGroup != null) Provider.UiCanvasGroup.alpha = 1f;
-            if (Provider.Cover != null) Provider.Cover.color = Provider.Cover.color.WithAlpha(0f);
+            if (Provider.Cover != null)
+                Provider.Cover.color = Provider.Cover.color.WithAlpha(Context.Player.Settings.CoverOpacity);
 
             if (Scanner.Instance != null)
             {
