@@ -108,10 +108,5 @@ See [cytoid-lab-v0.1.1.md](releases/cytoid-lab-v0.1.1.md) for v0.1.1 release not
 
 ## Related docs
 
-- [Cytoid Lab / Core 调研文档总览](2026-07-01-cytoid-lab-research-index.md)
-- [Cytoid Lab / Core 开发方向评审](2026-07-01-cytoid-lab-core-direction.md)
-- [Timeline resync 系统评审](2026-07-01-cytoid-lab-resync-system-review.md)
-- [c2v3 调研方案（Page Function + UI Animation）](2026-07-01-c2v3-research-plan.md)
-- [Storyboard 内存/性能/Bug 审计报告](storyboard-memory-performance-audit.md)
-- [Cytoid Lab macOS 移植评估](cytoid-lab-macos-adaptation.md)
-- [Hold seek 问题调研](2026-07-01-cytoid-lab-hold-seek-investigation.md)
+- [Cytoid Lab release notes](releases/)
+- Local research notes: `docs/local/research-index.md` (gitignored)

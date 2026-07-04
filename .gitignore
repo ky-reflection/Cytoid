@@ -12,6 +12,7 @@ engines/unity/Builds/CytoidLab.zip
 
 # Local scratch notes (not committed)
 docs/scratch/
+docs/local/
 
 # Local PowerShell helper scripts (Unix equivalents are tracked)
 engines/unity/flutter_plugin/tool/*.ps1
