@@ -247,6 +247,6 @@ Append new rows when architecture or default paths change.
 | Flutter plugin (iOS Swift / SPM) | `engines/unity/flutter_plugin/ios/cytoid_game_core/` |
 | Flutter Dart API | `engines/unity/flutter_plugin/lib/src/cytoid_game_core_client.dart` |
 | Protocol doc | `docs/host-protocol-v2.md` (v1 doc at engines/unity/flutter_plugin/example/docs/host-protocol.md is DEPRECATED) |
-| Cytoid Lab | `engines/unity/Assets/Scripts/Navigation/CytoidLab/`, `docs/cytoid-lab.md` |
+| Cytoid Lab | `engines/unity/Assets/Scripts/Navigation/CytoidLab/`, `docs/lab/guide.md` |
 | Cytoid Lab Windows build | `engines/unity/build-cytoid-lab.ps1`, `CytoidCoreBuild.BuildCytoidLabWindows64` |
 | Legacy architecture notes | `engines/unity/flutter_plugin/example/docs/old-architecture/` |
