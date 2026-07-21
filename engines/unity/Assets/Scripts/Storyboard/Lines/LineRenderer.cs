@@ -46,6 +46,7 @@ namespace Cytoid.Storyboard.Sprites
         public override void Dispose()
         {
             Destroy(Line.gameObject);
+            base.Dispose();
         }
 
     }

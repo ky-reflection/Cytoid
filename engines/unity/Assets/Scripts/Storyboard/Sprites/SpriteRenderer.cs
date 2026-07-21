@@ -91,6 +91,7 @@ namespace Cytoid.Storyboard.Sprites
             }
             Destroy(Image.gameObject);
             Image = null;
+            base.Dispose();
         }
 
     }

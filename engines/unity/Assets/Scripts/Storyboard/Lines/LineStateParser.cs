@@ -13,7 +13,7 @@ namespace Cytoid.Storyboard.Lines
 
         public override void Parse(LineState state, JObject json, LineState baseState)
         {
-            ParseObjectState(state, json, baseState);
+            ParseStageObjectState(state, json, baseState);
 
             if (json.SelectToken("pos") != null)
             {

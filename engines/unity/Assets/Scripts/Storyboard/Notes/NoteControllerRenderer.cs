@@ -51,6 +51,7 @@ namespace Cytoid.Storyboard.Sprites
             }
             notePlaceholderTransform = null;
             noteGameObject = null;
+            base.Dispose();
         }
 
         public override void Update(NoteControllerState fromState, NoteControllerState toState)

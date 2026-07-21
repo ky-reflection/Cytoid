@@ -33,6 +33,8 @@ namespace Cytoid.Storyboard
         
         public readonly Dictionary<string, JObject> Templates = new Dictionary<string, JObject>();
 
+        private bool disposed;
+
         public Storyboard(Game game, string content)
         {
             Game = game;
@@ -128,6 +130,9 @@ namespace Cytoid.Storyboard
 
         public void Dispose()
         {
+            if (disposed) return;
+            disposed = true;
+
             Renderer.Dispose();
             Texts.Clear();
             Sprites.Clear();
@@ -135,7 +140,10 @@ namespace Cytoid.Storyboard
             NoteControllers.Clear();
             Triggers.Clear();
             Templates.Clear();
+            Game.onNoteClear.RemoveListener(OnNoteClear);
+            Game.onGameDisposed.RemoveListener(OnGameDisposed);
             Game.onGameLateUpdate.RemoveListener(Renderer.OnGameUpdate);
+            if (UnitFloat.Storyboard == this) UnitFloat.Storyboard = null;
         }
 
         public async UniTask Initialize()
@@ -143,14 +151,17 @@ namespace Cytoid.Storyboard
             await Renderer.Initialize();
             // Register note clear listener for triggers
             Game.onNoteClear.AddListener(OnNoteClear);
-            Game.onGameDisposed.AddListener(_ => Dispose());
+            Game.onGameDisposed.AddListener(OnGameDisposed);
             Game.onGameLateUpdate.AddListener(Renderer.OnGameUpdate);
         }
 
+        private void OnGameDisposed(Game _) => Dispose();
+
         public void OnNoteClear(Game game, Note note)
         {
-            foreach (var trigger in Triggers)
+            for (var i = Triggers.Count - 1; i >= 0; i--)
             {
+                var trigger = Triggers[i];
                 if (trigger.Type == TriggerType.NoteClear && trigger.Notes.Contains(note.Model.id))
                 {
                     trigger.Triggerer = note;
@@ -385,10 +396,10 @@ namespace Cytoid.Storyboard
                 : TriggerType.None;
             trigger.Uses = (int?) json.SelectToken("uses") ?? trigger.Uses;
 
-            trigger.Notes = json["notes"] != null ? json.SelectToken("notes").Values<int>().ToList() : trigger.Notes;
-            trigger.Spawn = json["spawn"] != null ? json.SelectToken("spawn").Values<string>().ToList() : trigger.Spawn;
-            trigger.Destroy = json["destroy"] != null
-                ? json.SelectToken("destroy").Values<string>().ToList()
+            trigger.Notes = json["notes"] is JArray notesArray ? notesArray.Values<int>().ToList() : trigger.Notes;
+            trigger.Spawn = json["spawn"] is JArray spawnArray ? spawnArray.Values<string>().ToList() : trigger.Spawn;
+            trigger.Destroy = json["destroy"] is JArray destroyArray
+                ? destroyArray.Values<string>().ToList()
                 : trigger.Destroy;
             trigger.Combo = (int?) json.SelectToken("combo") ?? trigger.Combo;
             trigger.Score = (int?) json.SelectToken("score") ?? trigger.Score;
@@ -410,10 +421,12 @@ namespace Cytoid.Storyboard
             if (obj.TryGetValue("template", out var tmp))
             {
                 var templateId = (string) tmp;
-                var templateObject = Templates[templateId];
+                JObject templateObject = null;
+                if (templateId == null || !Templates.TryGetValue(templateId, out templateObject))
+                    Debug.LogWarning($"Storyboard: Template \"{templateId}\" does not exist");
 
                 // Template has states?
-                if (templateObject["states"] != null)
+                if (templateObject != null && templateObject["states"] != null)
                     AddStates(states, initialState, templateObject, ParseTime(obj, obj.SelectToken("time")));
             }
 
@@ -500,7 +513,8 @@ namespace Cytoid.Storyboard
             if (stateObject["template"] != null)
             {
                 var templateId = (string) stateObject["template"];
-                templateObject = Templates[templateId];
+                if (templateId == null || !Templates.TryGetValue(templateId, out templateObject))
+                    Debug.LogWarning($"Storyboard: Template \"{templateId}\" does not exist");
 
                 if (templateObject != null)
                 {
@@ -566,7 +580,11 @@ namespace Cytoid.Storyboard
                     }
                     return NumberUtils.ParseInt(it);
                 });
-                var note = Game.Chart.Model.note_map[id];
+                if (!Game.Chart.Model.note_map.TryGetValue(id, out var note))
+                {
+                    Debug.LogWarning($"Storyboard: Note {id} does not exist");
+                    return null;
+                }
                 switch (type)
                 {
                     case "intro":

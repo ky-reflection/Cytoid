@@ -70,6 +70,7 @@ namespace Cytoid.Storyboard.Texts
         {
             Destroy(Text.gameObject);
             Text = null;
+            base.Dispose();
         }
 
     }

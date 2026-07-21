@@ -23,6 +23,7 @@ namespace Cytoid.Storyboard.Videos
         private bool mediaPrepared;
         private bool timelineSyncedBeforePlayback;
         private float videoTimelineStartTime = float.NaN;
+        private bool ownsVideoObjects;
 
         public override Transform Transform => RectTransform;
 
@@ -89,6 +90,7 @@ namespace Cytoid.Storyboard.Videos
             RawImage = Instantiate(Provider.VideoRawImagePrefab, Provider.Canvas.transform);
             RenderTexture = new RenderTexture(UnityEngine.Screen.width / 2, UnityEngine.Screen.height / 2, 0, RenderTextureFormat.ARGB32);
             RenderTexture.Create();
+            ownsVideoObjects = true;
             RectTransform = RawImage.rectTransform;
             Canvas = RawImage.GetComponent<Canvas>();
             Canvas.overrideSorting = true;
@@ -189,9 +191,20 @@ namespace Cytoid.Storyboard.Videos
 
         public override void Dispose()
         {
-            if (VideoPlayer != null) Destroy(VideoPlayer.gameObject);
-            if (RawImage != null) Destroy(RawImage.gameObject);
-            if (RenderTexture != null) Destroy(RenderTexture);
+            if (ownsVideoObjects)
+            {
+                if (VideoPlayer != null) Destroy(VideoPlayer.gameObject);
+                if (RawImage != null) Destroy(RawImage.gameObject);
+                if (RenderTexture != null)
+                {
+                    RenderTexture.Release();
+                    Destroy(RenderTexture);
+                }
+            }
+            VideoPlayer = null;
+            RawImage = null;
+            RenderTexture = null;
+            base.Dispose();
         }
 
         public override void Update(VideoState fromState, VideoState toState)

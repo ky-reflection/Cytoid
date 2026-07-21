@@ -33,6 +33,13 @@ namespace Cytoid.Storyboard
             new Dictionary<Type, List<StoryboardComponentRenderer>>();
         
         public readonly Dictionary<string, int> SpritePathRefCount = new Dictionary<string, int>();
+
+        private static readonly Type[] UpdateOrder =
+            {typeof(NoteController), typeof(Text), typeof(Sprite), typeof(Line), typeof(Video), typeof(Controller)};
+
+        private readonly Dictionary<string, Type> renderersToDestroy = new Dictionary<string, Type>();
+
+        private bool disposed;
         
         public StoryboardConstants Constants { get; } = new StoryboardConstants();
         
@@ -151,6 +158,13 @@ namespace Cytoid.Storyboard
 
         public void Dispose()
         {
+            if (disposed) return;
+            disposed = true;
+
+            Game.onGameDisposed.RemoveListener(OnGameDisposed);
+            Game.onGamePaused.RemoveListener(OnGamePaused);
+            Game.onGameUnpaused.RemoveListener(OnGameUnpaused);
+
             ComponentRenderers.Values.ForEach(it => it.Dispose());
             ComponentRenderers.Clear();
             TypedComponentRenderers.Clear();
@@ -186,13 +200,16 @@ namespace Cytoid.Storyboard
             timer.Time();
 
             // Clear on abort/retry/complete
-            Game.onGameDisposed.AddListener(_ =>
-            {
-                Dispose();
-            });
-            Game.onGamePaused.AddListener(_ => SyncAllVideoPlayback());
-            Game.onGameUnpaused.AddListener(_ => SyncAllVideoPlayback());
+            Game.onGameDisposed.AddListener(OnGameDisposed);
+            Game.onGamePaused.AddListener(OnGamePaused);
+            Game.onGameUnpaused.AddListener(OnGameUnpaused);
         }
+
+        private void OnGameDisposed(Game _) => Dispose();
+
+        private void OnGamePaused(Game _) => SyncAllVideoPlayback();
+
+        private void OnGameUnpaused(Game _) => SyncAllVideoPlayback();
 
         private void SyncAllVideoPlayback(bool forceTimelineSync = false)
         {
@@ -268,12 +285,9 @@ namespace Cytoid.Storyboard
             var time = Time;
             if (time < 0 || Game.State.IsReadyToExit) return;
 
-            var updateOrder = new[]
-                {typeof(NoteController), typeof(Text), typeof(Sprite), typeof(Line), typeof(Video), typeof(Controller)};
+            renderersToDestroy.Clear();
 
-            var renderersToDestroy = new Dictionary<string, Type>();
-
-            foreach (var type in updateOrder)
+            foreach (var type in UpdateOrder)
             {
                 var renderers = TypedComponentRenderers[type];
                 foreach (var renderer in renderers)
@@ -288,10 +302,10 @@ namespace Cytoid.Storyboard
                         // Destroy the target as well
                         if (renderer.Parent != null && renderer.Component.TargetId != null)
                         {
-                            renderersToDestroy[renderer.Parent.Component.Id] = type;
+                            renderersToDestroy[renderer.Parent.Component.Id] = renderer.Parent.Component.GetType();
                             this.ListOf(renderer.Parent).Flatten(it => it.Children).ForEach(it =>
                             {
-                                renderersToDestroy[it.Component.Id] = type;
+                                renderersToDestroy[it.Component.Id] = it.Component.GetType();
                             });
                         }
                         else
@@ -299,7 +313,7 @@ namespace Cytoid.Storyboard
                             renderer.Parent?.Children.Remove(renderer);
                             this.ListOf(renderer).Flatten(it => it.Children).ForEach(it =>
                             {
-                                renderersToDestroy[it.Component.Id] = type;
+                                renderersToDestroy[it.Component.Id] = it.Component.GetType();
                             });
                         }
                         continue;
@@ -313,11 +327,11 @@ namespace Cytoid.Storyboard
             {
                 var id = it.Key;
                 var type = it.Value;
-                var renderer = ComponentRenderers[id];
-                
+                if (!ComponentRenderers.TryGetValue(id, out var renderer)) return;
+
                 renderer.Dispose();
                 ComponentRenderers.Remove(id);
-                TypedComponentRenderers[type].Remove(renderer);
+                if (TypedComponentRenderers.TryGetValue(type, out var typedRenderers)) typedRenderers.Remove(renderer);
             });
         }
 
@@ -361,13 +375,15 @@ namespace Cytoid.Storyboard
 
         public void DestroyObjectsById(string id)
         {
-            if (!ComponentRenderers.ContainsKey(id)) return;
-            ComponentRenderers[id].Let(it =>
+            if (!ComponentRenderers.TryGetValue(id, out var root)) return;
+            root.Parent?.Children.Remove(root);
+            this.ListOf(root).Flatten(it => it.Children).ForEach(it =>
             {
                 it.Dispose();
-                TypedComponentRenderers[it.GetType()].Remove(it);
+                ComponentRenderers.Remove(it.Component.Id);
+                if (TypedComponentRenderers.TryGetValue(it.Component.GetType(), out var typedRenderers))
+                    typedRenderers.Remove(it);
             });
-            ComponentRenderers.Remove(id);
         }
 
         public void RecalculateTime<TO, TS>(TO obj) where TO : Object<TS> where TS : ObjectState
