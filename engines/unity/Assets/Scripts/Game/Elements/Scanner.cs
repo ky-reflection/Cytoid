@@ -43,8 +43,7 @@ public class Scanner : SingletonMonoBehavior<Scanner>
         lineRenderer.positionCount = 2;
         lineRenderer.SetPosition(0, new Vector3(0, 0, 0));
         lineRenderer.SetPosition(1, new Vector3(0, 0, 0));
-        gameObject.GetComponent<LineRenderer>().startColor = new Color(1f, 1f, 1f);
-        gameObject.GetComponent<LineRenderer>().startColor = new Color(1f, 1f, 1f);
+        lineRenderer.startColor = new Color(1f, 1f, 1f);
         colorNext = new Color(1f, 1f, 1f, opacity);
         colorNextSpeed = 9.0f;
     }
@@ -180,7 +179,7 @@ public class Scanner : SingletonMonoBehavior<Scanner>
         Color color;
         if (colorOverride == Color.clear)
         {
-            color = gameObject.GetComponent<LineRenderer>().startColor;
+            color = lineRenderer.startColor;
             color = new Color((color.r * colorNextSpeed + colorNext.r) / (1 + colorNextSpeed),
                 (color.g * colorNextSpeed + colorNext.g) / (1 + colorNextSpeed),
                 (color.b * colorNextSpeed + colorNext.b) / (1 + colorNextSpeed));
@@ -191,8 +190,8 @@ public class Scanner : SingletonMonoBehavior<Scanner>
         }
 
         color = color.WithAlpha(exited ? 0 : opacity);
-        gameObject.GetComponent<LineRenderer>().startColor = color;
-        gameObject.GetComponent<LineRenderer>().endColor = color;
+        lineRenderer.startColor = color;
+        lineRenderer.endColor = color;
 
         // Position
         if (positionOverride != float.MinValue)

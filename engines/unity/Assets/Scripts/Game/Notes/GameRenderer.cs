@@ -89,6 +89,7 @@ public class GameRenderer
             Context.ScreenManager.ActiveScreen.State = ScreenState.Inactive;
         }
         cover.DOFade(0, 0.8f);
+        Context.AssetMemory.DisposeTaggedCacheAssets(AssetTag.GameCover);
     }
 
     public void OnUpdate()

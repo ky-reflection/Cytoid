@@ -6,6 +6,8 @@ public class GameTimeText : MonoBehaviour
     public Text text;
     public Game game;
 
+    private float lastTime = -1f;
+
     private void OnValidate()
     {
         this.AutoFill(ref text);
@@ -18,6 +20,9 @@ public class GameTimeText : MonoBehaviour
 
     private void Update()
     {
+        var roundedTime = Mathf.Round(game.Time * 10f) / 10f;
+        if (roundedTime == lastTime) return;
+        lastTime = roundedTime;
         text.text = $"Time: {game.Time:F3}";
     }
 }

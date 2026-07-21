@@ -41,6 +41,8 @@ public class ComboText : MonoBehaviour
             var combo = game.TierPlaySession?.Combo ?? game.State.Combo;
             if (combo != lastCombo)
             {
+                lastCombo = combo;
+                text.text = lastCombo + "x";
                 if (combo > 0)
                 {
                     lastSequence?.Kill();
@@ -54,8 +56,6 @@ public class ComboText : MonoBehaviour
                     text.DOFade(0, fadeDuration).SetEase(ease);
                 }
             }
-            lastCombo = combo;
-            text.text = lastCombo + "x";
         }
     }
 

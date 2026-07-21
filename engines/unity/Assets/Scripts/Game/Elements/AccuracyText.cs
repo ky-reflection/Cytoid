@@ -7,6 +7,8 @@ public class AccuracyText : MonoBehaviour
     public Text text;
     public Game game;
 
+    private double lastAccuracy = -1;
+
     private void OnValidate()
     {
         this.AutoFill(ref text);
@@ -30,7 +32,12 @@ public class AccuracyText : MonoBehaviour
             {
                 if (game.State.IsStarted && game.State.ClearCount > 0)
                 {
-                    text.text = (Math.Floor(game.State.Accuracy * 100 * 100) / 100).ToString("0.00") + "%";
+                    var accuracy = Math.Floor(game.State.Accuracy * 100 * 100) / 100;
+                    if (accuracy != lastAccuracy)
+                    {
+                        lastAccuracy = accuracy;
+                        text.text = accuracy.ToString("0.00") + "%";
+                    }
                 }
                 else
                 {
