@@ -12,6 +12,8 @@ public class UnitySoundEffect : ISoundEffect
     private readonly bool isResource;
     public readonly bool IsPreloaded;
 
+    public AudioClip Clip => audioClip;
+
     private int lastIndex = -1;
 
     internal UnitySoundEffect(AudioSource[] pool, UnityAudioServer.RoundRobinIndex roundRobinIndex, AudioClip clip, bool isResource, bool isPreloaded)

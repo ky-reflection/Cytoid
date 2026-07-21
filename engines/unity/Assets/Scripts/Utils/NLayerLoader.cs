@@ -9,6 +9,7 @@ public class NLayerLoader
 {
     private readonly string filePath;
     private readonly string filename;
+    private readonly object fileLock = new object();
     private MpegFile file;
 
     private List<MpegFile> createdFiles = new List<MpegFile>();
@@ -32,17 +33,24 @@ public class NLayerLoader
             data => file.ReadSamples(data, 0, data.Length),
             position =>
             {
-                var f = new MpegFile(filePath);
-                createdFiles.Add(f);
-                f.Time = TimeSpan.FromSeconds(position * 1.0f / f.SampleRate);
-                file = f;
+                lock (fileLock)
+                {
+                    if (file == null)
+                    {
+                        file = new MpegFile(filePath);
+                        createdFiles.Add(file);
+                    }
+                    file.Time = TimeSpan.FromSeconds(position * 1.0f / file.SampleRate);
+                }
             });
     }
 
     public void Dispose()
     {
-        createdFiles.ForEach(it => it.Dispose());
-        file = null;
+        lock (fileLock)
+        {
+            createdFiles.ForEach(it => it.Dispose());
+            file = null;
+        }
     }
-
 }
