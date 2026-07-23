@@ -13,6 +13,8 @@ namespace Cytoid.Storyboard.Sprites
 
         public override bool IsOnCanvas => false;
 
+        private bool ownsLine;
+
         public LineRenderer(StoryboardRenderer mainRenderer, Line component) : base(mainRenderer, component)
         {
         }
@@ -25,12 +27,14 @@ namespace Cytoid.Storyboard.Sprites
             if (targetRenderer != null)
             {
                 Line = targetRenderer.Line;
+                ownsLine = false;
             }
             else
             {
                 var gameObject = new GameObject("Line_" + Component.Id);
                 gameObject.transform.parent = MainRenderer.Game.contentParent.transform;
                 Line = gameObject.AddComponent<UnityEngine.LineRenderer>();
+                ownsLine = true;
                 Clear();
             }
         }
@@ -45,7 +49,9 @@ namespace Cytoid.Storyboard.Sprites
 
         public override void Dispose()
         {
-            Destroy(Line.gameObject);
+            if (ownsLine && Line != null) Destroy(Line.gameObject);
+            Line = null;
+            base.Dispose();
         }
 
     }

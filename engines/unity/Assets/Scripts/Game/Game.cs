@@ -817,6 +817,12 @@ public partial class Game : MonoBehaviour
 
         inputController.DisableInput();
         ObjectPool.Dispose();
+        Renderer?.DisposeResources();
+        if (!GameEmbedMode.IsBridgeEmbedded)
+        {
+            // Bridge-embedded mode: GameBridge ends the recorder after emitting result telemetry.
+            GamePlayEventRecorder.End();
+        }
 
         onGameDisposed.Invoke(this);
         if (!preserveContentProviderOnDispose)

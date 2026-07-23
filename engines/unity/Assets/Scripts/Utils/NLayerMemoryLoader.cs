@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using NLayer;
 using UnityEngine;
@@ -8,7 +7,7 @@ public sealed class NLayerMemoryLoader : IDisposable
 {
     private readonly byte[] bytes;
     private readonly string filename;
-    private readonly List<MpegFile> createdFiles = new List<MpegFile>();
+    private readonly object fileLock = new object();
     private MpegFile file;
 
     public NLayerMemoryLoader(byte[] bytes, string filename)
@@ -25,26 +24,40 @@ public sealed class NLayerMemoryLoader : IDisposable
             file.Channels,
             file.SampleRate,
             true,
-            data => file.ReadSamples(data, 0, data.Length),
+            data =>
+            {
+                lock (fileLock)
+                {
+                    if (file == null)
+                    {
+                        Array.Clear(data, 0, data.Length);
+                        return;
+                    }
+
+                    file.ReadSamples(data, 0, data.Length);
+                }
+            },
             position =>
             {
-                var f = CreateFile();
-                f.Time = TimeSpan.FromSeconds(position * 1.0f / f.SampleRate);
-                file = f;
+                lock (fileLock)
+                {
+                    if (file == null) return;
+                    file.Time = TimeSpan.FromSeconds(position * 1.0f / file.SampleRate);
+                }
             });
     }
 
     private MpegFile CreateFile()
     {
-        var result = new MpegFile(new MemoryStream(bytes, false));
-        createdFiles.Add(result);
-        return result;
+        return new MpegFile(new MemoryStream(bytes, false));
     }
 
     public void Dispose()
     {
-        createdFiles.ForEach(it => it.Dispose());
-        createdFiles.Clear();
-        file = null;
+        lock (fileLock)
+        {
+            file?.Dispose();
+            file = null;
+        }
     }
 }

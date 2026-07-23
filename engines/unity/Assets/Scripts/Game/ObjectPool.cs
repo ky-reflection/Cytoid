@@ -109,8 +109,10 @@ public class ObjectPool
     public void Dispose()
     {
         SpawnedNotes.Values.ForEach(it => it.Dispose());
+        SpawnedDragLines.Values.ForEach(it => it.Dispose());
         notePoolItems.Values.ForEach(it => it.Dispose());
         dragLinePoolItem.Dispose();
+        effectPoolItems.Values.ForEach(it => it.Dispose());
     }
 
     public Note SpawnNote(ChartModel.Note model)

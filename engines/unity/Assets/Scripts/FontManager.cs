@@ -34,7 +34,7 @@ public class FontManager
 
     public async void UpdateSceneTexts()
     {
-        if (!Loaded) await UniTask.WaitUntil(() => Loaded = true);
+        if (!Loaded) await UniTask.WaitUntil(() => Loaded);
 
         foreach (var gameObject in SceneManager.GetActiveScene().GetRootGameObjects())
         {
@@ -45,7 +45,7 @@ public class FontManager
     public async void UpdateText(Text text)
     {
         if (text.font == null) return;
-        if (!Loaded) await UniTask.WaitUntil(() => Loaded = true);
+        if (!Loaded) await UniTask.WaitUntil(() => Loaded);
         switch (Localization.Instance.SelectedLanguage)
         {
             case Language.Japanese:

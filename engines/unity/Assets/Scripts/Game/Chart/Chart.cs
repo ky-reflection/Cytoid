@@ -369,41 +369,42 @@ public class Chart
 
     public float GetScannerPositionY(float time, bool useScannerSmoothing)
     {
-        CurrentPageId = 0;
-        while (CurrentPageId < Model.page_list.Count && time > Model.page_list[CurrentPageId].end_time)
-            CurrentPageId++;
-        if (CurrentPageId == Model.page_list.Count)
+        // Lab SeekTo already syncs CurrentPageId; keep this query free of page-cursor side effects.
+        var pageId = 0;
+        while (pageId < Model.page_list.Count && time > Model.page_list[pageId].end_time)
+            pageId++;
+        if (pageId == Model.page_list.Count)
         {
             if (useScannerSmoothing)
-                return (float) (-verticalRatio * Model.page_list[CurrentPageId - 1].scan_line_direction *
+                return (float) (-verticalRatio * Model.page_list[pageId - 1].scan_line_direction *
                                 (-baseSize + 2.0f *
                                  baseSize *
-                                 (ConvertToTick(time) - Model.page_list[CurrentPageId - 1].end_tick) *
-                                 1.0f / (Model.page_list[CurrentPageId - 1].end_tick -
-                                         Model.page_list[CurrentPageId - 1].start_tick))
+                                 (ConvertToTick(time) - Model.page_list[pageId - 1].end_tick) *
+                                 1.0f / (Model.page_list[pageId - 1].end_tick -
+                                         Model.page_list[pageId - 1].start_tick))
                                 + verticalOffset);
-            return -verticalRatio * Model.page_list[CurrentPageId - 1].scan_line_direction *
+            return -verticalRatio * Model.page_list[pageId - 1].scan_line_direction *
                    (-baseSize + 2.0f *
                     baseSize *
-                    (time - Model.page_list[CurrentPageId - 1].end_time) *
-                    1.0f / (Model.page_list[CurrentPageId - 1].end_time -
-                            Model.page_list[CurrentPageId - 1].start_time))
+                    (time - Model.page_list[pageId - 1].end_time) *
+                    1.0f / (Model.page_list[pageId - 1].end_time -
+                            Model.page_list[pageId - 1].start_time))
                    + verticalOffset;
         }
 
         if (useScannerSmoothing)
-            return (float) (verticalRatio * Model.page_list[CurrentPageId].scan_line_direction *
+            return (float) (verticalRatio * Model.page_list[pageId].scan_line_direction *
                             (-baseSize + 2.0f *
                              baseSize *
-                             (ConvertToTick(time) - Model.page_list[CurrentPageId].start_tick) *
-                             1.0f / (Model.page_list[CurrentPageId].end_tick -
-                                     Model.page_list[CurrentPageId].start_tick))
+                             (ConvertToTick(time) - Model.page_list[pageId].start_tick) *
+                             1.0f / (Model.page_list[pageId].end_tick -
+                                     Model.page_list[pageId].start_tick))
                             + verticalOffset);
-        return verticalRatio * Model.page_list[CurrentPageId].scan_line_direction *
+        return verticalRatio * Model.page_list[pageId].scan_line_direction *
                (-baseSize + 2.0f *
                 baseSize *
-                (time - Model.page_list[CurrentPageId].start_time) *
-                1.0f / (Model.page_list[CurrentPageId].end_time - Model.page_list[CurrentPageId].start_time))
+                (time - Model.page_list[pageId].start_time) *
+                1.0f / (Model.page_list[pageId].end_time - Model.page_list[pageId].start_time))
                + verticalOffset;
     }
 

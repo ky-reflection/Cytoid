@@ -7,6 +7,9 @@ public class AccuracyText : MonoBehaviour
     public Text text;
     public Game game;
 
+    private double lastAccuracy = -1;
+    private string lastFallback;
+
     private void OnValidate()
     {
         this.AutoFill(ref text);
@@ -20,23 +23,35 @@ public class AccuracyText : MonoBehaviour
 
     protected void LateUpdate()
     {
-        if (game.IsLoaded)
+        if (!game.IsLoaded) return;
+
+        if (game.State.Mode == GameMode.Calibration)
         {
-            if (game.State.Mode == GameMode.Calibration)
+            SetFallback("");
+            return;
+        }
+
+        if (game.State.IsStarted && game.State.ClearCount > 0)
+        {
+            var accuracy = Math.Floor(game.State.Accuracy * 100 * 100) / 100;
+            if (accuracy != lastAccuracy)
             {
-                text.text = "";
-            }
-            else
-            {
-                if (game.State.IsStarted && game.State.ClearCount > 0)
-                {
-                    text.text = (Math.Floor(game.State.Accuracy * 100 * 100) / 100).ToString("0.00") + "%";
-                }
-                else
-                {
-                    text.text = "100.00%";
-                }
+                lastAccuracy = accuracy;
+                lastFallback = null;
+                text.text = accuracy.ToString("0.00") + "%";
             }
         }
+        else
+        {
+            SetFallback("100.00%");
+        }
+    }
+
+    private void SetFallback(string value)
+    {
+        if (lastFallback == value) return;
+        lastFallback = value;
+        lastAccuracy = -1;
+        text.text = value;
     }
 }

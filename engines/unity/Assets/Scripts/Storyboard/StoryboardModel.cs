@@ -54,7 +54,6 @@ namespace Cytoid.Storyboard
     [Serializable]
     public class StageObject<TS> : Object<TS> where TS : StageObjectState
     {
-        public string TargetId;
     }
 
     [Serializable]

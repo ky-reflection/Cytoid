@@ -59,6 +59,7 @@ public class AudioManager : SingletonMonoBehavior<AudioManager>
     {
         base.OnDestroy();
         Dispose();
+        if (ReferenceEquals(Context.AudioManager, this)) Context.AudioManager = null;
     }
 
     public void Dispose()

@@ -10,7 +10,7 @@ public class ScoreText : MonoBehaviour
     public float punchDuration = 0.2f;
     public Ease ease = Ease.OutCubic;
 
-    private double lastScore;
+    private double lastScore = double.NaN;
     private Sequence lastSequence;
 
     private void OnValidate()
@@ -26,16 +26,24 @@ public class ScoreText : MonoBehaviour
 
     protected void LateUpdate()
     {
-        if (game.IsLoaded)
+        if (!game.IsLoaded) return;
+
+        if (game.State.Mode == GameMode.Calibration)
         {
-            if (game.State.Mode == GameMode.Calibration)
+            if (!double.IsNaN(lastScore) || text.text != "")
             {
+                lastScore = double.NaN;
                 text.text = "";
-                return;
             }
-            if (game.State.IsStarted)
+            return;
+        }
+
+        if (game.State.IsStarted)
+        {
+            var score = game.State.Score;
+            if (double.IsNaN(lastScore) || score != lastScore)
             {
-                if (game.State.Score != lastScore)
+                if (!double.IsNaN(lastScore) && score != lastScore)
                 {
                     lastSequence?.Kill();
                     transform.localScale = new Vector3((punchScale + 1) / 2f, punchScale, 1);
@@ -43,13 +51,14 @@ public class ScoreText : MonoBehaviour
                         .Append(transform.DOScale(1, punchDuration).SetEase(ease));
                 }
 
-                lastScore = game.State.Score;
+                lastScore = score;
                 text.text = ((int) lastScore).ToString("D6");
             }
-            else
-            {
-                text.text = "000000";
-            }
+        }
+        else if (text.text != "000000")
+        {
+            lastScore = double.NaN;
+            text.text = "000000";
         }
     }
 }

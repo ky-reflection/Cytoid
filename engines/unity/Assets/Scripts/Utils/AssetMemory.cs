@@ -108,7 +108,7 @@ public class AssetMemory
             await UniTask.WaitUntil(() => !isLoading.Contains(path), cancellationToken: cancellationToken);
             if (PrintDebugMessages) Debug.Log($"AssetMemory: Wait {path} complete.");
             
-            return await LoadAsset<T>(path, tag, cancellationToken, options);
+            return await LoadAsset<T>(path, tag, cancellationToken, options, useFileCacheOnly);
         }
 
         CheckIfExceedTagLimit(tag);
@@ -227,7 +227,9 @@ public class AssetMemory
                 {
                     if (!(options is SpriteAssetOptions spriteOptions))
                     {
-                        throw new ArgumentException();
+                        Object.Destroy(texture);
+                        throw new ArgumentException(
+                            $"AssetMemory: FitCrop options for {path} must be SpriteAssetOptions");
                     }
 
                     if (texture.width != spriteOptions.FitCropSize[0] || texture.height != spriteOptions.FitCropSize[1])
@@ -239,31 +241,11 @@ public class AssetMemory
                         texture = croppedTexture;
                         bytes = texture.EncodeToJPG();
 
-                        var completed = false;
-                        async void Task()
-                        {
-                            await UniTask.SwitchToThreadPool();
-                            var cleanPath = variantPath.Substring("file://".Length);
-                            Directory.CreateDirectory(Path.GetDirectoryName(cleanPath));
-                            File.WriteAllBytes(cleanPath, bytes);
-                            completed = true;
-                        }
-                        Task();
-                        await UniTask.WaitUntil(() => completed);
+                        await WriteCacheFileAsync(variantPath, bytes);
                     }
                     else
                     {
-                        var completed = false;
-                        async void Task()
-                        {
-                            await UniTask.SwitchToThreadPool();
-                            var cleanPath = variantPath.Substring("file://".Length);
-                            Directory.CreateDirectory(Path.GetDirectoryName(cleanPath));
-                            File.Copy(loadPath.Substring("file://".Length), cleanPath);
-                            completed = true;
-                        }
-                        Task();
-                        await UniTask.WaitUntil(() => completed);
+                        await CopyCacheFileAsync(loadPath, variantPath);
                     }
                 }
 
@@ -399,6 +381,36 @@ public class AssetMemory
         var dirPath = Path.GetDirectoryName(path);
         Directory.CreateDirectory(dirPath ?? throw new Exception());
         return path;
+    }
+
+    private static async UniTask WriteCacheFileAsync(string variantPath, byte[] bytes)
+    {
+        await UniTask.SwitchToThreadPool();
+        try
+        {
+            var cleanPath = variantPath.Substring("file://".Length);
+            Directory.CreateDirectory(Path.GetDirectoryName(cleanPath));
+            File.WriteAllBytes(cleanPath, bytes);
+        }
+        finally
+        {
+            await UniTask.SwitchToMainThread();
+        }
+    }
+
+    private static async UniTask CopyCacheFileAsync(string loadPath, string variantPath)
+    {
+        await UniTask.SwitchToThreadPool();
+        try
+        {
+            var cleanPath = variantPath.Substring("file://".Length);
+            Directory.CreateDirectory(Path.GetDirectoryName(cleanPath));
+            File.Copy(loadPath.Substring("file://".Length), cleanPath, overwrite: true);
+        }
+        finally
+        {
+            await UniTask.SwitchToMainThread();
+        }
     }
 
     public abstract class Entry

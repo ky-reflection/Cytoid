@@ -149,12 +149,10 @@ public class ClassicNoteRenderer : NoteRenderer
 
     protected virtual void UpdateColors()
     {
-        Ring.color = Game.Config.GetRingColorOverride(Note.Model) != Color.clear
-            ? Game.Config.GetRingColorOverride(Note.Model)
-            : BaseRingColor;
-        Fill.color = Game.Config.GetFillColorOverride(Note.Model) != Color.clear
-            ? Game.Config.GetFillColorOverride(Note.Model)
-            : BaseFillColor;
+        var ringColorOverride = Game.Config.GetRingColorOverride(Note.Model);
+        Ring.color = ringColorOverride != Color.clear ? ringColorOverride : BaseRingColor;
+        var fillColorOverride = Game.Config.GetFillColorOverride(Note.Model);
+        Fill.color = fillColorOverride != Color.clear ? fillColorOverride : BaseFillColor;
     }
 
     protected virtual void UpdateTransformScale()

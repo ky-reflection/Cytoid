@@ -143,7 +143,17 @@ public partial class DragLineElement : MonoBehaviour
             introRatio = time < FromNoteModel.nextdraglinestarttime ? 1.0f : 0.0f;
         }
 
-        outroRatio = (time - FromNoteModel.start_time) / (ToNoteModel.start_time - FromNoteModel.start_time);
+        var outroDuration = ToNoteModel.start_time - FromNoteModel.start_time;
+        if (outroDuration > 0)
+        {
+            outroRatio = (time - FromNoteModel.start_time) / outroDuration;
+        }
+        else
+        {
+            // Simultaneous or reverse drag chain: complete once at/after from-note start
+            // so Collect() can run (outroRatio >= 1). Avoids NaN locking the line forever.
+            outroRatio = time < FromNoteModel.start_time ? 0.0f : 1.0f;
+        }
 
         if (introRatio > 0 && introRatio < 1)
         {

@@ -23,6 +23,7 @@ public abstract class Screen : MonoBehaviour, ScreenListener, ScreenPostActiveLi
     private ScreenState state = ScreenState.Destroyed;
 
     private bool rebuiltLayoutGroups;
+    private UnityAction onLanguageChanged;
 
     public ScreenState State
     {
@@ -97,13 +98,15 @@ public abstract class Screen : MonoBehaviour, ScreenListener, ScreenPostActiveLi
         ChildrenCanvasGroups = GetComponentsInChildren<CanvasGroup>().ToList();
         ChildrenGraphicRaycasters = GetComponentsInChildren<GraphicRaycaster>().ToList();
         RectTransform = GetComponent<RectTransform>();
-        Context.OnLanguageChanged.AddListener(() => rebuiltLayoutGroups = false);
+        onLanguageChanged = () => rebuiltLayoutGroups = false;
+        Context.OnLanguageChanged.AddListener(onLanguageChanged);
         if (Context.ScreenManager == null) await UniTask.WaitUntil(() => Context.ScreenManager != null);
         Context.ScreenManager.AddHandler(this);
     }
 
     private void OnDestroy()
     {
+        if (onLanguageChanged != null) Context.OnLanguageChanged.RemoveListener(onLanguageChanged);
         Context.ScreenManager.RemoveHandler(this);
     }
 

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using NLayer;
 using UnityEngine;
@@ -9,9 +8,8 @@ public class NLayerLoader
 {
     private readonly string filePath;
     private readonly string filename;
+    private readonly object fileLock = new object();
     private MpegFile file;
-
-    private List<MpegFile> createdFiles = new List<MpegFile>();
 
     public NLayerLoader(string filePath)
     {
@@ -19,7 +17,6 @@ public class NLayerLoader
         this.filePath = filePath;
         filename = Path.GetFileNameWithoutExtension(filePath);
         file = new MpegFile(filePath);
-        createdFiles.Add(file);
     }
 
     public AudioClip LoadAudioClip()
@@ -29,20 +26,35 @@ public class NLayerLoader
              file.Channels,
             file.SampleRate,
             true,
-            data => file.ReadSamples(data, 0, data.Length),
+            data =>
+            {
+                lock (fileLock)
+                {
+                    if (file == null)
+                    {
+                        Array.Clear(data, 0, data.Length);
+                        return;
+                    }
+
+                    file.ReadSamples(data, 0, data.Length);
+                }
+            },
             position =>
             {
-                var f = new MpegFile(filePath);
-                createdFiles.Add(f);
-                f.Time = TimeSpan.FromSeconds(position * 1.0f / f.SampleRate);
-                file = f;
+                lock (fileLock)
+                {
+                    if (file == null) return;
+                    file.Time = TimeSpan.FromSeconds(position * 1.0f / file.SampleRate);
+                }
             });
     }
 
     public void Dispose()
     {
-        createdFiles.ForEach(it => it.Dispose());
-        file = null;
+        lock (fileLock)
+        {
+            file?.Dispose();
+            file = null;
+        }
     }
-
 }

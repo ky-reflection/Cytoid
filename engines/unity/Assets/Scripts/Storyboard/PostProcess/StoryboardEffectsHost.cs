@@ -7,6 +7,8 @@ namespace Cytoid.Storyboard.PostProcess
     {
         [SerializeField] StoryboardRendererProvider provider;
 
+        IStoryboardEffects registeredEffects;
+
         void Awake()
         {
             if (provider == null)
@@ -32,7 +34,14 @@ namespace Cytoid.Storyboard.PostProcess
                 postProcess = camera.gameObject.AddComponent<StoryboardFallbackPostProcess>();
 
             postProcess.enabled = true;
-            StoryboardEffects.Current = new FallbackStoryboardEffects(postProcess);
+            registeredEffects = new FallbackStoryboardEffects(postProcess);
+            StoryboardEffects.Current = registeredEffects;
+        }
+
+        void OnDestroy()
+        {
+            if (registeredEffects != null && StoryboardEffects.Current == registeredEffects)
+                StoryboardEffects.Current = null;
         }
     }
 }
