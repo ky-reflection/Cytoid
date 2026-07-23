@@ -1,0 +1,30 @@
+Package: cytoid-private-2.1.5-bug-perf-review-pack-20260723
+Created: 2026-07-23T12:31:18Z
+Baseline: private/main @ 0e11d2c3f12ed61968aac3058272748045b27f3d
+Unity: 6000.0.58f2
+Target: Cytoid-private 2.1.5 (VersionCode 124 suggested)
+Third-party verdict: Agree-with-changes
+Includes: module-code-audit (04)
+
+Files:
+./MANIFEST.txt
+./README.md
+./docs/01-design-review.md
+./docs/02-audit-index.md
+./docs/03-third-party-response.md
+./docs/04-module-code-audit.md
+./docs/2026-07-23-private-2.1.5-THIRD-PARTY-REVIEW-INDEX.md
+./docs/2026-07-23-private-2.1.5-bug-perf-design-review.md
+./docs/2026-07-23-private-2.1.5-third-party-review-response.md
+./docs/2026-07-23-private-module-code-audit.md
+
+SHA256:
+2dd1d23add20b826d609f0558f5709cc7578bdc7b709927007bd0d7275a849ce  ./README.md
+e6a9a8faff19b906843f0e389c29e3a14533863bf0f24c9fbfebe15d722057ea  ./docs/01-design-review.md
+ff06f8e1a8380124c53fe348a2f7e8a868dea44031d9e710ecb7f14eea634205  ./docs/02-audit-index.md
+d5413b0cc4107f1cefe8be899f1b91186037adff666d94b191d857a4bbdbd89f  ./docs/03-third-party-response.md
+27fd3b967bc2b32dd5fc260d682cfb93adc4333d2c020efd1d79e032d3f26e4d  ./docs/04-module-code-audit.md
+ff06f8e1a8380124c53fe348a2f7e8a868dea44031d9e710ecb7f14eea634205  ./docs/2026-07-23-private-2.1.5-THIRD-PARTY-REVIEW-INDEX.md
+e6a9a8faff19b906843f0e389c29e3a14533863bf0f24c9fbfebe15d722057ea  ./docs/2026-07-23-private-2.1.5-bug-perf-design-review.md
+d5413b0cc4107f1cefe8be899f1b91186037adff666d94b191d857a4bbdbd89f  ./docs/2026-07-23-private-2.1.5-third-party-review-response.md
+27fd3b967bc2b32dd5fc260d682cfb93adc4333d2c020efd1d79e032d3f26e4d  ./docs/2026-07-23-private-module-code-audit.md
