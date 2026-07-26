@@ -1,10 +1,19 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 public class InputController : MonoBehaviour
 {
+    /// <summary>
+    /// Timing cluster window (seconds) for overlapping hitboxes (伪双 / tight 纵连).
+    /// Aligned with the Perfect judgment window (±40ms). When any colliding candidate
+    /// lies inside this band, only those in-band notes compete (no fallthrough to a
+    /// farther overlapping note on the same touch). Among competitors the smallest
+    /// |Δt| wins (id as tie-break). If none are in-band, the same |Δt| rule applies
+    /// over the full colliding set so wider grades still work.
+    /// </summary>
+    public const float HitTimingClusterWindowSeconds = 0.040f;
+
     public Game game;
 
     public readonly Dictionary<int, FlickNote> FlickingNotes = new Dictionary<int, FlickNote>(); // Finger index to note
@@ -12,6 +21,8 @@ public class InputController : MonoBehaviour
     public readonly List<Note> TouchableDragNotes = new List<Note>(); // Drag head, Drag child, CDrag child
     public readonly List<HoldNote> TouchableHoldNotes = new List<HoldNote>(); // Hold, Long hold
     public readonly List<Note> TouchableNormalNotes = new List<Note>(); // Click, CDrag head, Flick (Hold/LongHold: FingerUpdate only)
+
+    private readonly List<Note> hitCandidates = new List<Note>();
 
     private void Awake()
     {
@@ -81,14 +92,6 @@ public class InputController : MonoBehaviour
                 TouchableHoldNotes.Add((HoldNote) note);
             }
         }
-
-        // // Make sure to query non-flick notes first
-        // TouchableNormalNotes.Sort((a, b) =>
-        // {
-        //     if (a.GetType() == b.GetType()) return a.Model.id - b.Model.id;
-        //     if (a is FlickNote) return 1;
-        //     return -1;
-        // });
     }
 
     protected virtual void OnFingerDown(GameFinger finger)
@@ -98,29 +101,42 @@ public class InputController : MonoBehaviour
             : game.camera.ScreenToWorldPoint(new Vector3(finger.ScreenPosition.x, finger.ScreenPosition.y, 10));
 
         var collidedDrag = false;
-        // Query drag notes first
-        foreach (var note in TouchableDragNotes.Where(note => note != null).Where(note => note.DoesCollide(pressedPosition)))
+        // Query drag notes first — among overlaps, prefer smallest |Δt|
+        CollectColliding(TouchableDragNotes, pressedPosition, note => true);
+        foreach (var note in OrderHitCandidatesByAbsDelta())
         {
             if (!note.OnTouch(finger.ScreenPosition)) continue;
             collidedDrag = true;
             break;
         }
 
-        foreach (var note in TouchableNormalNotes.Where(note => note != null).Where(note => note.DoesCollide(pressedPosition)))
+        CollectColliding(TouchableNormalNotes, pressedPosition, note =>
+        {
+            if (note is FlickNote)
+            {
+                return !FlickingNotes.ContainsKey(finger.Index) && !FlickingNotes.ContainsValue((FlickNote) note);
+            }
+
+            if (collidedDrag && Math.Abs(note.TimeUntilStart) > note.Page.Duration / 8f) return false;
+            if (note.Model.page_index > game.Chart.CurrentPageId &&
+                note.Model.start_time - game.Time >
+                game.Chart.Model.page_list[game.Chart.CurrentPageId].Duration * 0.5f)
+            {
+                return false;
+            }
+
+            return true;
+        });
+
+        foreach (var note in OrderHitCandidatesByAbsDelta())
         {
             if (note is FlickNote flickNote)
             {
-                if (FlickingNotes.ContainsKey(finger.Index) || FlickingNotes.ContainsValue(flickNote))
-                    continue;
                 FlickingNotes.Add(finger.Index, flickNote);
                 flickNote.StartFlicking(pressedPosition);
             }
             else
             {
-                if (collidedDrag && Math.Abs(note.TimeUntilStart) > note.Page.Duration / 8f) continue;
-                if (note.Model.page_index > game.Chart.CurrentPageId &&
-                    note.Model.start_time - game.Time >
-                    game.Chart.Model.page_list[game.Chart.CurrentPageId].Duration * 0.5f) continue;
                 if (!note.OnTouch(finger.ScreenPosition)) continue;
             }
 
@@ -142,11 +158,10 @@ public class InputController : MonoBehaviour
             if (cleared) FlickingNotes.Remove(finger.Index);
         }
 
-        // Query drag notes
-        foreach (var note in TouchableDragNotes)
+        // Query drag notes — among overlaps, prefer smallest |Δt|
+        CollectColliding(TouchableDragNotes, pos, note => true);
+        foreach (var note in OrderHitCandidatesByAbsDelta())
         {
-            if (note == null) continue;
-            if (!note.DoesCollide(pos)) continue;
             if (!note.OnTouch(finger.ScreenPosition)) continue;
             break;
         }
@@ -156,24 +171,24 @@ public class InputController : MonoBehaviour
         {
             var switchedToNewNote = false; // If the finger holds a new note
 
-            // Query unheld hold notes
-            foreach (var note in TouchableHoldNotes)
+            // Query unheld hold notes — among overlaps, prefer smallest |Δt|
+            CollectColliding(TouchableHoldNotes, pos, note => true);
+            foreach (var note in OrderHitCandidatesByAbsDelta())
             {
-                if (note == null) continue;
-                if (note.DoesCollide(pos))
-                {
-                    HoldingNotes.Add(finger.Index, note);
-                    note.UpdateFinger(finger.Index, true);
-                    switchedToNewNote = true;
-                    break;
-                }
+                var holdNote = (HoldNote) note;
+                HoldingNotes.Add(finger.Index, holdNote);
+                holdNote.UpdateFinger(finger.Index, true);
+                switchedToNewNote = true;
+                break;
             }
 
             // Query held hold notes (i.e. multiple fingers on the same hold note)
             if (!switchedToNewNote)
             {
-                foreach (var holdNote in HoldingNotes.Values.Where(holdNote => holdNote.DoesCollide(pos)))
+                CollectColliding(HoldingNotes.Values, pos, note => true);
+                foreach (var note in OrderHitCandidatesByAbsDelta())
                 {
+                    var holdNote = (HoldNote) note;
                     HoldingNotes.Add(finger.Index, holdNote);
                     holdNote.UpdateFinger(finger.Index, true);
                     break;
@@ -214,6 +229,54 @@ public class InputController : MonoBehaviour
             var flickingNote = FlickingNotes[finger.Index];
             flickingNote.UpdateFingerPosition(pos);
             FlickingNotes.Remove(finger.Index);
+        }
+    }
+
+    private static float AbsJudgmentDelta(Note note) =>
+        Math.Abs(note.TimeUntilStart + note.JudgmentOffset);
+
+    private void CollectColliding(IEnumerable<Note> notes, Vector2 worldPos, Func<Note, bool> predicate)
+    {
+        hitCandidates.Clear();
+        foreach (var note in notes)
+        {
+            if (note == null || !note.DoesCollide(worldPos)) continue;
+            if (!predicate(note)) continue;
+            hitCandidates.Add(note);
+        }
+    }
+
+    /// <summary>
+    /// Yield hit candidates ordered by ascending |Δt|, then note id.
+    /// If any candidate is inside <see cref="HitTimingClusterWindowSeconds"/>,
+    /// only the in-band subset is yielded (伪双 / 纵连 protection).
+    /// </summary>
+    private IEnumerable<Note> OrderHitCandidatesByAbsDelta()
+    {
+        if (hitCandidates.Count == 0) yield break;
+
+        var hasInBand = false;
+        for (var i = 0; i < hitCandidates.Count; i++)
+        {
+            if (AbsJudgmentDelta(hitCandidates[i]) <= HitTimingClusterWindowSeconds)
+            {
+                hasInBand = true;
+                break;
+            }
+        }
+
+        hitCandidates.Sort((a, b) =>
+        {
+            var cmp = AbsJudgmentDelta(a).CompareTo(AbsJudgmentDelta(b));
+            if (cmp != 0) return cmp;
+            return a.Model.id.CompareTo(b.Model.id);
+        });
+
+        foreach (var note in hitCandidates)
+        {
+            // Sorted by |Δt|: once past the band, remaining notes are out-of-band.
+            if (hasInBand && AbsJudgmentDelta(note) > HitTimingClusterWindowSeconds) yield break;
+            yield return note;
         }
     }
 
