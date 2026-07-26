@@ -11,7 +11,7 @@ public class InputController : MonoBehaviour
     public readonly Dictionary<int, HoldNote> HoldingNotes = new Dictionary<int, HoldNote>(); // Finger index to note
     public readonly List<Note> TouchableDragNotes = new List<Note>(); // Drag head, Drag child, CDrag child
     public readonly List<HoldNote> TouchableHoldNotes = new List<HoldNote>(); // Hold, Long hold
-    public readonly List<Note> TouchableNormalNotes = new List<Note>(); // Click, CDrag head, Hold, Long hold, Flick
+    public readonly List<Note> TouchableNormalNotes = new List<Note>(); // Click, CDrag head, Flick (Hold/LongHold: FingerUpdate only)
 
     private void Awake()
     {
@@ -72,14 +72,18 @@ public class InputController : MonoBehaviour
             var note = game.SpawnedNotes[id];
             if (!note.HasEmerged || note.IsCleared) continue;
 
-            if (note.Type != NoteType.DragHead && note.Type != NoteType.DragChild &&
-                note.Type != NoteType.CDragChild && note.Type != NoteType.DropDrag)
+            if (note.Type == NoteType.DragHead || note.Type == NoteType.DragChild ||
+                note.Type == NoteType.CDragChild || note.Type == NoteType.DropDrag)
+            {
+                TouchableDragNotes.Add(note);
+            }
+            else if (note.Type != NoteType.Hold && note.Type != NoteType.LongHold)
             {
                 TouchableNormalNotes.Add(note);
             }
-            else
+            else if (note.Type != NoteType.Hold && note.Type != NoteType.LongHold)
             {
-                TouchableDragNotes.Add(note);
+                TouchableNormalNotes.Add(note);
             }
 
             if ((note.Type == NoteType.Hold || note.Type == NoteType.LongHold) &&
@@ -108,9 +112,9 @@ public class InputController : MonoBehaviour
         // Query drag notes first
         foreach (var note in TouchableDragNotes.Where(note => note != null).Where(note => note.DoesCollide(pressedPosition)))
         {
-            note.OnTouch(finger.ScreenPosition);
+            if (!note.OnTouch(finger.ScreenPosition)) continue;
             collidedDrag = true;
-            break; // Query other notes too!
+            break;
         }
 
         foreach (var note in TouchableNormalNotes.Where(note => note != null).Where(note => note.DoesCollide(pressedPosition)))
@@ -128,7 +132,7 @@ public class InputController : MonoBehaviour
                 if (note.Model.page_index > game.Chart.CurrentPageId &&
                     note.Model.start_time - game.Time >
                     game.Chart.Model.page_list[game.Chart.CurrentPageId].Duration * 0.5f) continue;
-                note.OnTouch(finger.ScreenPosition);
+                if (!note.OnTouch(finger.ScreenPosition)) continue;
             }
 
             return;
@@ -153,11 +157,9 @@ public class InputController : MonoBehaviour
         foreach (var note in TouchableDragNotes)
         {
             if (note == null) continue;
-            if (note.DoesCollide(pos))
-            {
-                note.OnTouch(finger.ScreenPosition);
-                break; // Query other notes too!
-            }
+            if (!note.DoesCollide(pos)) continue;
+            if (!note.OnTouch(finger.ScreenPosition)) continue;
+            break;
         }
 
         // If this is a new finger

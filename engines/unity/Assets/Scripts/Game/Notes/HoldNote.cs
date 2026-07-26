@@ -82,9 +82,10 @@ public partial class HoldNote : Note
         return !IsHolding && base.ShouldMiss();
     }
     
-    public override void OnTouch(Vector2 screenPos)
+    public override bool OnTouch(Vector2 screenPos)
     {
-        // Do nothing
+        // Hold binds via InputController.UpdateFinger, not OnTouch.
+        return false;
     }
 
     public void UpdateFinger(int finger, bool isHolding)
