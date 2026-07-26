@@ -67,6 +67,47 @@ public static class GameLaunchVfs
         return new Uri(Path.GetFullPath(path)).AbsoluteUri;
     }
 
+    /// <summary>
+    /// Converts a local <c>file://</c> URI (possibly percent-encoded for non-ASCII
+    /// path segments) back to a filesystem path suitable for <see cref="File"/> APIs.
+    /// </summary>
+    public static string FromFileUri(string fileUri)
+    {
+        if (string.IsNullOrWhiteSpace(fileUri))
+        {
+            throw new ArgumentException("file URI is required.");
+        }
+
+        Uri uri;
+        try
+        {
+            uri = new Uri(fileUri);
+        }
+        catch (Exception e)
+        {
+            throw new ArgumentException($"Not a valid file URI: {e.Message}");
+        }
+
+        if (!uri.IsAbsoluteUri || !uri.IsFile)
+        {
+            throw new ArgumentException("URI must be a local file:// path.");
+        }
+
+        return Path.GetFullPath(uri.LocalPath);
+    }
+
+    public static bool FileUriExists(string fileUri)
+    {
+        try
+        {
+            return File.Exists(FromFileUri(fileUri));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private static string ResolveFilePath(string rootDirectory, string assetPath, string fieldName)
     {
         if (string.IsNullOrWhiteSpace(rootDirectory))

@@ -64,7 +64,7 @@ public class GameRenderer
                     Game.Level.Path,
                     Game.Level.Meta.background.path,
                     "level.background.path")
-                : "file://" + Game.Level.Path + Game.Level.Meta.background.path;
+                : GameLaunchVfs.ToFileUri(Game.Level.Path + Game.Level.Meta.background.path);
             cover.sprite = await Context.AssetMemory.LoadAsset<Sprite>(path, AssetTag.GameCover);
             cover.FitSpriteAspectRatio();
             cover.DOFade(Context.Player.Settings.CoverOpacity, 0.8f);

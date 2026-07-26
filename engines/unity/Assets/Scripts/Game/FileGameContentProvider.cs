@@ -1,10 +1,8 @@
 using System;
 using System.IO;
-using System.Text;
 using Cysharp.Threading.Tasks;
 using Polyglot;
 using UnityEngine;
-using UnityEngine.Networking;
 
 public sealed class FileGameContentProvider : IGameContentProvider
 {
@@ -23,24 +21,28 @@ public sealed class FileGameContentProvider : IGameContentProvider
         this.difficulty = difficulty ?? throw new ArgumentNullException(nameof(difficulty));
     }
 
-    public async UniTask<string> LoadChartText()
+    public UniTask<string> LoadChartText()
     {
-        var chartPath = "file://" + level.Path + ChartSection.path;
-        using (var request = UnityWebRequest.Get(chartPath))
+        // Read via filesystem APIs so non-ASCII filenames in level.json work.
+        // (Raw "file://" + path concatenation breaks UnityWebRequest for those paths.)
+        var chartPath = level.Path + ChartSection.path;
+        if (!File.Exists(chartPath))
         {
-            await request.SendWebRequest();
-            if (request.isNetworkError || request.isHttpError)
-            {
-                throw new Exception($"Failed to download chart from {chartPath}: {request.error}");
-            }
-
-            return Encoding.UTF8.GetString(request.downloadHandler.data);
+            throw new Exception($"Failed to load chart from {chartPath}: file not found");
         }
+
+        return UniTask.FromResult(File.ReadAllText(chartPath));
     }
 
     public async UniTask<AudioClip> LoadMusic()
     {
-        var audioPath = "file://" + level.Path + level.Meta.GetMusicPath(difficulty.Id);
+        var audioFsPath = level.Path + level.Meta.GetMusicPath(difficulty.Id);
+        if (!File.Exists(audioFsPath))
+        {
+            throw new Exception($"Failed to download audio from {audioFsPath}: file not found");
+        }
+
+        var audioPath = GameLaunchVfs.ToFileUri(audioFsPath);
         audioClipLoader = new AudioClipLoader(audioPath);
         await audioClipLoader.Load();
         if (audioClipLoader.Error != null)

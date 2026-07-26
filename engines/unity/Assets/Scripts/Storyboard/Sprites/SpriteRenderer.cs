@@ -62,7 +62,7 @@ namespace Cytoid.Storyboard.Sprites
                         MainRenderer.Game.Level.Path,
                         spritePath,
                         "storyboard.sprite.path")
-                    : "file://" + MainRenderer.Game.Level.Path + spritePath;
+                    : GameLaunchVfs.ToFileUri(MainRenderer.Game.Level.Path + spritePath);
                 Image.sprite = await Context.AssetMemory.LoadAsset<UnityEngine.Sprite>(LoadPath, AssetTag.Storyboard);
 
                 if (!MainRenderer.SpritePathRefCount.ContainsKey(LoadPath))

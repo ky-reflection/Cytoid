@@ -61,20 +61,25 @@ namespace Cytoid.Storyboard.Videos
                 }
                 VideoPlayer.gameObject.name = RawImage.gameObject.name = $"$Video[{videoPath}]";
 
-                var prefix = "file://";
-                if (Application.platform == RuntimePlatform.Android && Context.AndroidVersionCode >= 29)
-                {
-                    Debug.Log("Detected Android 29 or above. Performing magic...");
-                    prefix = ""; // Android Q Unity issue
-                    VideoPlayer.source = VideoSource.Url;
-                }
-                var path = MainRenderer.Game.UsesExternalContent
+                var fsPath = MainRenderer.Game.UsesExternalContent
                     ? GameLaunchVfs.ResolveRequiredFilePath(
                         MainRenderer.Game.Level.Path,
                         videoPath,
                         "storyboard.video.path")
                     : MainRenderer.Game.Level.Path + videoPath;
-                path = prefix + path;
+                // Android Q+: VideoPlayer needs a raw filesystem path (Unity quirk).
+                // Elsewhere: percent-encoded file:// so non-ASCII filenames work.
+                string path;
+                if (Application.platform == RuntimePlatform.Android && Context.AndroidVersionCode >= 29)
+                {
+                    Debug.Log("Detected Android 29 or above. Performing magic...");
+                    VideoPlayer.source = VideoSource.Url;
+                    path = fsPath;
+                }
+                else
+                {
+                    path = GameLaunchVfs.ToFileUri(fsPath);
+                }
                 VideoPlayer.url = path;
                 VideoPlayer.aspectRatio = VideoAspectRatio.FitOutside;
                 VideoPlayer.renderMode = VideoRenderMode.RenderTexture;

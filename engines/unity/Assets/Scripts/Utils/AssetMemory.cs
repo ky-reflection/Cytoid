@@ -76,13 +76,17 @@ public class AssetMemory
         string variantPath;
         if (!path.StartsWith("file://"))
         {
-            variantPath = "file://" + GetCacheFilePath(path) + suffix;
+            variantPath = GameLaunchVfs.ToFileUri(GetCacheFilePath(path) + suffix);
         }
         else
         {
-            variantPath = path + suffix;
+            // Append crop-size suffix to the filesystem path, then re-encode as file://
+            // so percent-encoded non-ASCII segments stay valid for UnityWebRequest.
+            variantPath = string.IsNullOrEmpty(suffix)
+                ? path
+                : GameLaunchVfs.ToFileUri(GameLaunchVfs.FromFileUri(path) + suffix);
         }
-        var variantExists = File.Exists(variantPath.Substring("file://".Length));
+        var variantExists = GameLaunchVfs.FileUriExists(variantPath);
         
         var cachedAsset = GetCachedAssetEntry<T>(variantPath);
         if (cachedAsset != null)
@@ -182,7 +186,7 @@ public class AssetMemory
             }
 
             if (PrintDebugMessages) Debug.Log($"AssetMemory: Cached at {cachePath}");
-            loadPath = "file://" + cachePath;
+            loadPath = GameLaunchVfs.ToFileUri(cachePath);
         }
 
         T asset = default;
@@ -243,7 +247,7 @@ public class AssetMemory
                         async void Task()
                         {
                             await UniTask.SwitchToThreadPool();
-                            var cleanPath = variantPath.Substring("file://".Length);
+                            var cleanPath = GameLaunchVfs.FromFileUri(variantPath);
                             Directory.CreateDirectory(Path.GetDirectoryName(cleanPath));
                             File.WriteAllBytes(cleanPath, bytes);
                             completed = true;
@@ -257,9 +261,9 @@ public class AssetMemory
                         async void Task()
                         {
                             await UniTask.SwitchToThreadPool();
-                            var cleanPath = variantPath.Substring("file://".Length);
+                            var cleanPath = GameLaunchVfs.FromFileUri(variantPath);
                             Directory.CreateDirectory(Path.GetDirectoryName(cleanPath));
-                            File.Copy(loadPath.Substring("file://".Length), cleanPath);
+                            File.Copy(GameLaunchVfs.FromFileUri(loadPath), cleanPath);
                             completed = true;
                         }
                         Task();

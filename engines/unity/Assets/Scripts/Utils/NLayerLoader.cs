@@ -15,7 +15,12 @@ public class NLayerLoader
 
     public NLayerLoader(string filePath)
     {
-        filePath = filePath.Replace("file://", "");
+        // AudioClipLoader may pass a percent-encoded file:// URI (via GameLaunchVfs.ToFileUri).
+        // Strip/unescape so MpegFile opens the real filesystem path.
+        if (filePath.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+        {
+            filePath = GameLaunchVfs.FromFileUri(filePath);
+        }
         this.filePath = filePath;
         filename = Path.GetFileNameWithoutExtension(filePath);
         file = new MpegFile(filePath);

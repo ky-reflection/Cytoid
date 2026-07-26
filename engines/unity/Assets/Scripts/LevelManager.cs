@@ -50,7 +50,10 @@ public class LevelManager
             }
 #else
             // For runtime builds (especially mobile), use UnityWebRequest
-            if (Application.platform == RuntimePlatform.IPhonePlayer) packagePath = "file://" + packagePath;
+            if (Application.platform == RuntimePlatform.IPhonePlayer)
+            {
+                packagePath = GameLaunchVfs.ToFileUri(packagePath);
+            }
 
             using (var request = UnityWebRequest.Get(packagePath))
             {
@@ -549,7 +552,7 @@ public class LevelManager
                         // Generate thumbnail
                         if (!File.Exists(level.Path + CoverThumbnailFilename))
                         {
-                            var thumbnailPath = "file://" + level.Path + level.Meta.background.path;
+                            var thumbnailPath = GameLaunchVfs.ToFileUri(level.Path + level.Meta.background.path);
 
                             if (lowMemory)
                             {
