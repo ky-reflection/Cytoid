@@ -1,0 +1,371 @@
+# 判定优化设计文档（Hit Selection by Note Time + 15ms Cluster）
+
+| 项 | 值 |
+|---|---|
+| **文档状态** | Design / Implemented on branch（待手测验证） |
+| **日期** | 2026-07-27（修订：弃用 `|Δt|` 主键；已按本文重写分支代码） |
+| **工作分支** | `fix/judgment-optimization`（`origin` → ky-reflection/Cytoid） |
+| **基线（upstream main）** | 已含 `#187` input-consume；**尚不含**本优化 |
+| **前置依赖** | [Cytoid/Cytoid#187](https://github.com/Cytoid/Cytoid/pull/187) |
+| **影响面** | 主改 `InputController`；候选入口须排除 `IsCleared` / 已占用；**不改**等级窗口数值与计分公式 |
+| **门禁归属** | Track B → 验证后按需 Track C backport；默认不塞进 2.1.5 A1 |
+
+---
+
+## 0. 一句话结论
+
+重叠 hitbox 时：
+
+1. **拍序主键** = `effectiveNoteTime` 升序（先打仍可判定的更早 note，禁止无故「跳拍」）；
+2. **同拍识别** = note-to-note `NoteGap ≤ 15ms` 且 **簇跨度** `maxTime − minTime ≤ 15ms`（禁止相邻差链式扩张）；
+3. **同拍内仲裁** = 触点到 **实际渲染位置 / collider 中心** 的 x 距离，再 `effectiveNoteTime`，再 `id`；
+4. **簇间软续扫**：当前簇全部拒绝后，继续下一簇（**不是** 40ms Perfect 硬截断）。
+
+`HitDelta`（触摸相对 note 的 `|Δt|`）**退出候选排序主键**，只服务等级、early/late、可否接受触摸、日志。
+
+这是 **命中选择优化**，不是 JudgmentResolver / 计分重构（B4）。
+
+---
+
+## 1. 为什么弃用「`|Δt|` 最小优先」
+
+### 1.1 对称性破坏拍序
+
+`|Δt|` 把 early / late 当成完全对称。反例：
+
+| Note | 状态 | HitDelta |
+|------|------|----------|
+| A | late 30ms（仍可打） | 30ms |
+| B | early 20ms | 20ms |
+
+按 `|Δt|` 会选 **B**，跳过仍可判定的 **A** → 跳拍，随后 A 易直接 Miss。  
+谱面顺序语义应是：**除非明确视为同一拍（簇），否则后面 note 不能越过前面仍可打的 note。**
+
+### 1.2 40ms Perfect 窗不宜兼作「同拍簇」
+
+Perfect 带（±40ms）是 **触摸相对 note** 的等级窗，不是 **note 相对 note** 的同拍间距。用 40ms 做硬截断 / 全窗切到 x 优先，容易把 20–40ms 快速纵连、交互误认成双押。
+
+### 1.3 两个量必须分开
+
+| 量 | 定义 | 用途 |
+|----|------|------|
+| **HitDelta(n)** | `\|noteTime(n) + offset − inputTime\|` 即 `\|TimeUntilStart + JudgmentOffset\|` | 等级；early/late；note 能否接受本次触摸；日志 / 测试。**不是**排序主键 |
+| **NoteGap(a,b)** | `\|noteTime(a) − noteTime(b)\|`（建议用 `effectiveNoteTime`） | 识别同 tick / 伪双押簇 |
+
+`effectiveNoteTime(n) = start_time + JudgmentOffset`（与等级时间轴一致）。
+
+---
+
+## 2. 目标与非目标
+
+### 2.1 Must
+
+1. **单调拍序**：候选按 `effectiveNoteTime` 升序成簇、按簇处理；非同簇时不可跳过更早仍可接受的 note。  
+2. **15ms NoteGap 簇**（note-to-note）：同 tick / `has_sibling` 真双押（间距 0）稳定覆盖；极小错位伪双可进簇；默认不把 20–40ms 纵连并成一簇。  
+3. **簇内空间优先**：`|touchX − renderedNoteCenterX|` → `effectiveNoteTime` → `id`。位置取 **实际渲染 / collider 中心**，**不用** 原始 `Model.x`。  
+4. **软续扫**：簇内候选全部拒绝后，继续下一簇的时间序候选。  
+5. **有效候选过滤**：排除 `IsCleared`、已被其他 finger 占用（reserved）、已过期（不能再接受触摸）的 note。  
+6. **同帧多指安全**：Touchable 按帧刷新 + `TryClear` 对已 clear 返回 `true` 的吞指问题必须堵住（见 §8）。  
+7. **无重叠时**与 `#187` 之后的 main 行为一致。
+
+### 2.2 Non-goals
+
+- 改 Perfect/Great/Good/Bad/Miss 阈值或计分。  
+- 抽出 JudgmentResolver（B4）。  
+- Lab `JudgeFromModel` 去重（另任务；实机触摸路径以本文为准）。  
+- 按刷新率动态改 15ms。  
+- 首版「经典选择序」玩家开关（投诉集中再加）。  
+- Drag 与 Normal **合并**成同一竞争集（仍分桶；桶内用本文规则）。
+
+### 2.3 成功标准
+
+- late 仍可打的 A 不被 early 的 B 抢走（非同簇）。  
+- 同 tick 双押：按触点 x 落到更近的那颗。  
+- ~15ms 内伪双：进同一簇，x 仲裁。  
+- 20–40ms 纵连：通常 **不同簇**，按时间序逐拍处理，不因 x 抢拍。  
+- 孤立 note / 宽窗 Great·Good：可打性不回归。  
+- 同帧两指点不同 note：第二指不被已 clear note 吞掉。
+
+---
+
+## 3. As-Is（仍成立的问题）
+
+```
+GameTouchInput.Update (-100)  → 可连续 FingerDown
+Game.Update                   → onGameUpdate → 重建 Touchable*
+```
+
+- Touchable 桶序 ≈ `SpawnedNotes` 键序，非拍序。  
+- 选择 = 碰撞后列表序第一个 Accept。  
+- `#187`：`OnTouch`/`TryClear` 返回是否 clear；无效 touch 继续扫。  
+- **缺口**：已 clear 仍留在本帧列表；`TryClear` 对已 clear 返回 `IsCleared==true` → 同帧后指被吞（见 §8）。
+
+分支 tip `11f19274` 的 `|Δt|` + 40ms cluster **已废弃**；当前分支基于 `main`（含 `#187`）按本文重写。
+
+---
+
+## 4. To-Be 算法（规范）
+
+### 4.1 常量
+
+```csharp
+public const float NoteClusterGapSeconds = 0.015f; // 15ms；测试可扫 12 / 15 / 20，默认固定 15
+```
+
+- **不要** 按刷新率缩放。  
+- 15ms 是保守首发值，不一定数学最优；发版前用固定默认 + 可选内部调参，不写进玩家设置（首版）。
+
+### 4.2 收集有效碰撞候选
+
+对某一桶（Drag / Normal / Hold）与触点 `p`：
+
+```
+C = { n |
+      n ∈ TouchableBucket
+      ∧ n ≠ null
+      ∧ !n.IsCleared
+      ∧ !ReservedByOtherFinger(n, finger)
+      ∧ DoesCollide(n, p)
+      ∧ ExtraBucketPredicate(n)   // 现有 Flick 占用、collidedDrag 抑制、跨页过早等
+      ∧ CanAcceptTouch(n)         // 未过期：CalculateGrade≠None 或类型自定义 early 拒绝之前的「可尝试」语义
+    }
+```
+
+`CanAcceptTouch`：与现有 `OnTouch` 早期 `return false`（如 Drag 过早）及等级窗一致——**不能接受的不要进排序**，避免占坑；具体可与 `TryClear` 前条件对齐，避免双重真相（实现时抽一小函数）。
+
+### 4.3 成簇（禁止链式扩张）
+
+1. 将 `C` 按 `effectiveNoteTime` **升序**排列（tie-break：`id`）。  
+2. **先定序，再划簇**——**禁止**在 `Sort` comparator 里两两 `NoteGap` 比较来「排序」，那无法表达跨度约束。  
+3. 划簇规则（推荐线性扫描）：
+
+```
+clusters = []
+current = [sorted[0]]
+for n in sorted[1..]:
+    spanIfAdd = n.effectiveNoteTime - current[0].effectiveNoteTime
+    if spanIfAdd <= NoteClusterGapSeconds:
+        current.append(n)
+    else:
+        clusters.append(current)
+        current = [n]
+clusters.append(current)
+```
+
+等价约束：
+
+- 簇内任意两点的时间差 ≤ 15ms（因已按时间排序，⇔ `maxTime − minTime ≤ 15ms`）。  
+- **禁止**「相邻都 ≤15ms」链式并成更大簇：例如时间戳 `0, 10, 20` ms → 两个簇 `[0,10]` 与 `[20]`（或 `[0]` 与 `[10,20]`，取决于扫描；**跨度**不得变为 20ms 的单簇）。  
+  上式以 **相对簇内最早 note** 的跨度截断，因此 `0,10,20` → `[0,10]` + `[20]`。
+
+同 tick（`NoteGap=0`）/ 谱面 `has_sibling` 真双押：必然 `span=0`，同簇。
+
+### 4.4 簇间 / 簇内次序
+
+**簇间：** 按簇内最小 `effectiveNoteTime` 升序（与构造顺序一致）。
+
+**簇内排序键（升序，越小越优先）：**
+
+1. `|touchX − renderedNoteCenterX|`  
+2. `effectiveNoteTime`  
+3. `Model.id`
+
+然后：
+
+```
+for cluster in clusters:
+    for note in OrderWithinCluster(cluster):
+        if Accept(note):   // OnTouch / 绑定等，须真正接受
+            done
+    // 本簇无人接受 → 软续扫下一簇
+```
+
+### 4.5 渲染位置（x）
+
+- 使用 **实际显示位置**：优先 `Collider.bounds.center`（与 `DoesCollide`/`OverlapPoint` 一致），或等价的当前 `transform` 世界/本地 x（与 InputController 触点坐标系一致）。  
+- **禁止** 仅用 chart `Model.x` / 未应用 Override·Storyboard 位移前的原始坐标。  
+- Drag 头插值移动中：以当前帧碰撞体中心为准。
+
+### 4.6 HitDelta 残留职责
+
+| 用途 | 是否用 HitDelta |
+|------|-----------------|
+| 候选排序主键 | **否** |
+| `CalculateGrade` Perfect/Great/… | 是（现有） |
+| early/late 展示与权重 | 是 |
+| `CanAcceptTouch` / 窗内可打 | 是（与等级窗一致） |
+| 日志、单测断言 | 是 |
+
+---
+
+## 5. 场景演算
+
+设 offset=0，触点同时命中下列 note。
+
+| 场景 | Notes (effectiveTime, x) | 期望 |
+|------|--------------------------|------|
+| 跳拍陷阱 | A late 30ms；B early 20ms；不同簇 | **先 A**（时间序），不得因 \|Δt\| 选 B |
+| 同 tick 双押 | A、B 同 time，x=0.3 / 0.7；触点偏右 | **B**（x 更近） |
+| 伪双 10ms | A@0，B@10ms，hitbox 重叠 | 同簇；x 近者优先 |
+| 纵连 0/10/20ms | 三音 | 簇 `[0,10]` 与 `[20]`；处理完第一簇再第二簇；**不是** 一个 20ms 大簇 |
+| 纵连 30ms | A@0，B@30ms | 两簇；先 A 后 B；不因 B 的 x 更近而抢先 |
+| 宽窗 only | 两音都在 Good，间距 50ms | 两簇；HitDelta 不排序，但仍可按拍序尝试 |
+| 同帧双指 | 指1 clear A；指2 打 B | 指2 **不得** 因 A 仍在列表且 `IsCleared` 被吞 |
+
+---
+
+## 6. 与 note 类型 / 分桶
+
+| 类型 | 桶 | 规则 |
+|------|----|------|
+| Click / CDrag head | Normal · Down | 全文算法 |
+| Flick | Normal · Down 绑定 | 排除已 reserved；Update 仍走既有 flick 路径 |
+| Drag* | Drag · Down/Update | **桶内**用本文；仍 **先于** Normal 整桶（不跨类型统一竞争） |
+| Hold / LongHold | Hold · Update | 绑定重叠时用本文；Down 不进 Hold（`#187`） |
+
+`collidedDrag`、跨页过早等 **ExtraBucketPredicate** 保留；不在本 PR 改 `JudgmentOffset` 是否写入 `collidedDrag` 抑制（另开清理任务）。
+
+---
+
+## 7. 实现约束
+
+1. **先排序再划簇**，再簇内二次排序；不要把 NoteGap 塞进 `Comparison<Note>` 当总序。  
+2. 复用 `List` 缓冲，避免热路径 LINQ。  
+3. `Accept` 成功条件与 `#187` 一致：真正 clear / 真正绑定；**已 `IsCleared` 不得视为成功消费**（应在收集阶段排除；防守性再在 `TryClear` 开头 `if (IsCleared) return false`）。  
+4. Rebase `main` 后重写 tip，丢弃 `|Δt|`+40ms 选择逻辑；文档与分支名仍为 `fix/judgment-optimization`。  
+5. 坐标系统一：触点转换用的 camera / 本地空间须与 collider 中心一致。
+
+### 7.1 建议提交切片
+
+| Commit | 内容 |
+|--------|------|
+| 1 | `fix(gameplay): skip already-cleared notes in hit selection`（§8，可单独先合） |
+| 2 | `fix(gameplay): select overlapping hits by note time and 15ms clusters` |
+| 3 | docs：本文定稿 |
+
+---
+
+## 8. 同帧多指 / IsCleared 吞指（必修）
+
+**事实（已核实）：**
+
+- Touchable 仅在 `onGameUpdate` 重建；`GameTouchInput`（−100）可在同一次 `Update` 连发多个 `FingerDown`。  
+- `Clear` → `AwaitAndCollect` → `DelayFrame(0)` 才 `Collect`（关 collider、移出 `SpawnedNotes`）。  
+- `#187` 后 `TryClear` 返回 `IsCleared`：对 **已 clear** 的 note 仍为 `true` → 后指被消费。
+
+**Must fix（与选择算法同属本优化门禁）：**
+
+1. 收集候选时 `!IsCleared`。  
+2. `TryClear` / `OnTouch`：若已 `IsCleared`，返回 **`false`**（语义：本次触摸未新接受），避免防守路径再吞指。  
+3. （可选增强）`Clear` 同步从当前 `Touchable*` 移除，或标记 reserved；非必须若 1+2 完备。
+
+---
+
+## 9. 备选与否决
+
+| 方案 | 结论 |
+|------|------|
+| `|Δt|` 全局最小优先 | **否决**（跳拍） |
+| `|Δt|` + Perfect 40ms 硬截断 | **否决**（窗语义错位；纵连误并） |
+| 仅 x 距离、无视时间 | **否决** |
+| 相邻 NoteGap≤15 链式并簇 | **否决**（0/10/20 会并成 20ms） |
+| 簇内拒绝后硬停止、不扫后簇 | **否决**（与软续扫相反） |
+| 15ms 随 fps 变化 | **否决** |
+| 本阶段跨 Drag/Normal 统一竞争 | **延后** Phase 2 |
+
+---
+
+## 10. 测试计划
+
+### 10.1 纯函数 / 单测（建议抽出划簇 + 簇内排序）
+
+| 用例 | 期望 |
+|------|------|
+| 空 / 单候选 | 平凡 |
+| late30 + early20 | 先 late |
+| 同 time 不同 x | x 近者先 |
+| times 0,10,20 | 两簇，跨度均 ≤15 |
+| times 0,30 | 两簇 |
+| 含 IsCleared | 不出现在 C |
+
+### 10.2 手测
+
+| ID | 场景 | 期望 |
+|----|------|------|
+| T1 | 跳拍陷阱谱 | 先清可打的过去 note |
+| T2 | 同 tick 双押 | 跟手指 x |
+| T3 | ~10ms 伪双 | 同簇 x 仲裁 |
+| T4 | 30ms 纵连 | 按拍，不 x 抢拍 |
+| T5 | 孤立各类型 | 无回归 |
+| T6 | JudgmentOffset≠0 | 拍序用 effectiveTime |
+| T7 | 同帧双指两 note | 不吞第二指 |
+| T8 | Storyboard 位移 note | x 跟渲染位置，非 Model.x |
+
+调参：内部对比 **12 / 15 / 20ms**，默认锁定 **15**。
+
+---
+
+## 11. 分阶段
+
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| Phase 0 | `#187` input-consume | main 已合 |
+| Phase 1a | IsCleared / reserved 过滤 + TryClear 语义修正 | **已实现（本分支）** |
+| Phase 1b | effectiveNoteTime 成簇 + 15ms + 簇内 x | **已实现（本分支）** |
+| Phase 2 | 可选：触点距离次级键扩展；跨类型统一竞争 | 未开始 |
+| Phase 3 | JudgmentResolver（B4） | 中长期 |
+
+---
+
+## 12. 开放问题
+
+1. **`CanAcceptTouch` 与 `CalculateGrade()==None` 是否完全等价？**  
+   Drag 的 0.31s 早触拒绝等需并入收集谓词，避免进簇占位。实现时列一张类型表。  
+
+2. **Hold 绑定是否也要「未过期」？**  
+   建议与现网可绑定窗口对齐，避免改变长按手感。  
+
+3. **簇内第二键用 `effectiveNoteTime` 还是 HitDelta？**  
+   本文：同簇已近同时，用 `effectiveNoteTime` 稳定；HitDelta 不做簇内主键。  
+
+4. **playEvents 是否记录 `hitSelectionVersion=2`？**  
+   建议有 telemetry 时加上；非阻断。
+
+---
+
+## 13. 附录
+
+### 13.1 术语
+
+| 中文 | 含义 |
+|------|------|
+| 判定优化 | 本文 Phase 1（选择层） |
+| 判定重构 | B4 resolver，非本分支 |
+| HitDelta | 触摸↔note 时间差绝对值 |
+| NoteGap | note↔note 时间差 |
+| effectiveNoteTime | `start_time + JudgmentOffset` |
+| 簇 / cluster | NoteGap 跨度 ≤15ms 的同拍集合 |
+| 软续扫 | 簇拒绝后继续下一簇 |
+| 跳拍 | 后 note 越过仍可打的前 note |
+
+### 13.2 关键文件
+
+| 文件 | 角色 |
+|------|------|
+| `InputController.cs` | 收集 / 成簇 / 选择 |
+| `Note.cs` | Clear / TryClear / 等级 / IsCleared |
+| `GameTouchInput.cs` | 同帧多 FingerDown |
+| `NoteRenderer.cs` | collider / DoesCollide |
+| `ClassicNoteRenderer.cs` | hitbox 半径 |
+
+### 13.3 口径变更记录
+
+| 时间 | 变更 |
+|------|------|
+| 初稿 | `|Δt|` 主键 + Perfect 40ms cluster 硬截断 |
+| 2026-07-27 17:24 | 提出 HitDelta/NoteGap 分离、15ms、簇内 x；软截断 |
+| 2026-07-27 17:30 | **定稿方向**：弃用 `|Δt|` 主键；`effectiveNoteTime` 单调拍序；跨度约束成簇；簇内 x；Δt 仅等级/可接受性 |
+
+---
+
+*实现以本文为准；分支已按 Phase 1a/1b 重写。合入前完成 §10 验证。*
