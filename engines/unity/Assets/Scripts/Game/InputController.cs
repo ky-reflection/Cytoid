@@ -6,6 +6,8 @@ public class InputController : MonoBehaviour
 {
     /// <summary>
     /// Max note-to-note span (seconds) for a same-beat hit cluster (真双押 / 伪双).
+    /// Used only for click-consuming select notes (Click / CDrag head / Flick).
+    /// Drag and Hold stay on list-order scan — they do not consume a discrete click.
     /// Span is measured against the earliest effectiveNoteTime in the cluster
     /// (no adjacent-gap chain expansion). Soft fallthrough to later clusters remains.
     /// </summary>
@@ -99,15 +101,17 @@ public class InputController : MonoBehaviour
             : game.camera.ScreenToWorldPoint(new Vector3(finger.ScreenPosition.x, finger.ScreenPosition.y, 10));
 
         var collidedDrag = false;
-        // Query drag notes first — note-time clusters, then x within cluster
-        CollectColliding(TouchableDragNotes, pressedPosition, _ => true);
-        foreach (var note in OrderHitCandidatesByNoteTimeClusters(pressedPosition.x))
+        // Drag does not consume a discrete click — keep list-order scan (before select notes).
+        foreach (var note in TouchableDragNotes)
         {
+            if (note == null || note.IsCleared) continue;
+            if (!note.DoesCollide(pressedPosition)) continue;
             if (!note.OnTouch(finger.ScreenPosition)) continue;
             collidedDrag = true;
             break;
         }
 
+        // Select notes (Click / CDrag head / Flick): note-time clusters, then x within cluster
         CollectColliding(TouchableNormalNotes, pressedPosition, note =>
         {
             if (note is FlickNote flickNote)
@@ -156,10 +160,11 @@ public class InputController : MonoBehaviour
             if (cleared) FlickingNotes.Remove(finger.Index);
         }
 
-        // Query drag notes — note-time clusters, then x within cluster
-        CollectColliding(TouchableDragNotes, pos, _ => true);
-        foreach (var note in OrderHitCandidatesByNoteTimeClusters(pos.x))
+        // Drag / Hold: continuous contact, not click-consume — list-order scan only
+        foreach (var note in TouchableDragNotes)
         {
+            if (note == null || note.IsCleared) continue;
+            if (!note.DoesCollide(pos)) continue;
             if (!note.OnTouch(finger.ScreenPosition)) continue;
             break;
         }
@@ -169,13 +174,12 @@ public class InputController : MonoBehaviour
         {
             var switchedToNewNote = false; // If the finger holds a new note
 
-            // Query unheld hold notes — note-time clusters, then x within cluster
-            CollectColliding(TouchableHoldNotes, pos, _ => true);
-            foreach (var note in OrderHitCandidatesByNoteTimeClusters(pos.x))
+            foreach (var note in TouchableHoldNotes)
             {
-                var holdNote = (HoldNote) note;
-                HoldingNotes.Add(finger.Index, holdNote);
-                holdNote.UpdateFinger(finger.Index, true);
+                if (note == null || note.IsCleared) continue;
+                if (!note.DoesCollide(pos)) continue;
+                HoldingNotes.Add(finger.Index, note);
+                note.UpdateFinger(finger.Index, true);
                 switchedToNewNote = true;
                 break;
             }
@@ -183,10 +187,10 @@ public class InputController : MonoBehaviour
             // Query held hold notes (i.e. multiple fingers on the same hold note)
             if (!switchedToNewNote)
             {
-                CollectColliding(HoldingNotes.Values, pos, _ => true);
-                foreach (var note in OrderHitCandidatesByNoteTimeClusters(pos.x))
+                foreach (var holdNote in HoldingNotes.Values)
                 {
-                    var holdNote = (HoldNote) note;
+                    if (holdNote == null || holdNote.IsCleared) continue;
+                    if (!holdNote.DoesCollide(pos)) continue;
                     HoldingNotes.Add(finger.Index, holdNote);
                     holdNote.UpdateFinger(finger.Index, true);
                     break;
@@ -253,10 +257,11 @@ public class InputController : MonoBehaviour
     }
 
     /// <summary>
-    /// Yield candidates in beat order: cluster by effectiveNoteTime span ≤
+    /// Yield select-note candidates in beat order: cluster by effectiveNoteTime span ≤
     /// <see cref="NoteClusterGapSeconds"/> (no chain expansion), process earlier
     /// clusters first; within a cluster prefer closer rendered center X, then time, then id.
     /// Soft fallthrough: caller continues when Accept fails.
+    /// Only used for click-consuming notes in <see cref="TouchableNormalNotes"/>.
     /// </summary>
     private IEnumerable<Note> OrderHitCandidatesByNoteTimeClusters(float touchWorldX)
     {

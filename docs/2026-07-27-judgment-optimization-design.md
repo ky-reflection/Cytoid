@@ -3,18 +3,22 @@
 | 项 | 值 |
 |---|---|
 | **文档状态** | Design / Implemented on branch（待手测验证） |
-| **日期** | 2026-07-27（修订：弃用 `|Δt|` 主键；已按本文重写分支代码） |
+| **日期** | 2026-07-27（修订：弃用 `|Δt|`；成簇仅限 select / 消耗点击的 note） |
 | **工作分支** | `fix/judgment-optimization`（`origin` → ky-reflection/Cytoid） |
 | **基线（upstream main）** | 已含 `#187` input-consume；**尚不含**本优化 |
 | **前置依赖** | [Cytoid/Cytoid#187](https://github.com/Cytoid/Cytoid/pull/187) |
-| **影响面** | 主改 `InputController`；候选入口须排除 `IsCleared` / 已占用；**不改**等级窗口数值与计分公式 |
+| **影响面** | 主改 `InputController` **select 路径**（Click / CDrag head / Flick）；Drag / Hold **不进**成簇候选；排除 `IsCleared`；**不改**等级窗口与计分 |
 | **门禁归属** | Track B → 验证后按需 Track C backport；默认不塞进 2.1.5 A1 |
 
 ---
 
 ## 0. 一句话结论
 
-重叠 hitbox 时：
+**范围：仅消耗离散点击（`FingerDown` → clear / Flick 绑定）的 select note**——`TouchableNormalNotes`：Click、CDrag head、Flick。
+
+**不在范围：Drag\*、Hold / LongHold。** 它们是持续接触 / 绑定，不「消耗一次点击」；保持既有列表序扫描（仍先于 select 查 Drag；Hold 仅 `FingerUpdate`）。
+
+重叠 hitbox 的 **select** 候选上：
 
 1. **拍序主键** = `effectiveNoteTime` 升序（先打仍可判定的更早 note，禁止无故「跳拍」）；
 2. **同拍识别** = note-to-note `NoteGap ≤ 15ms` 且 **簇跨度** `maxTime − minTime ≤ 15ms`（禁止相邻差链式扩张）；
@@ -23,7 +27,7 @@
 
 `HitDelta`（触摸相对 note 的 `|Δt|`）**退出候选排序主键**，只服务等级、early/late、可否接受触摸、日志。
 
-这是 **命中选择优化**，不是 JudgmentResolver / 计分重构（B4）。
+这是 **select 命中选择优化**，不是 JudgmentResolver / 计分重构（B4），也不是 Drag/Hold 仲裁重写。
 
 ---
 
@@ -60,13 +64,14 @@ Perfect 带（±40ms）是 **触摸相对 note** 的等级窗，不是 **note �
 
 ### 2.1 Must
 
-1. **单调拍序**：候选按 `effectiveNoteTime` 升序成簇、按簇处理；非同簇时不可跳过更早仍可接受的 note。  
-2. **15ms NoteGap 簇**（note-to-note）：同 tick / `has_sibling` 真双押（间距 0）稳定覆盖；极小错位伪双可进簇；默认不把 20–40ms 纵连并成一簇。  
-3. **簇内空间优先**：`|touchX − renderedNoteCenterX|` → `effectiveNoteTime` → `id`。位置取 **实际渲染 / collider 中心**，**不用** 原始 `Model.x`。  
-4. **软续扫**：簇内候选全部拒绝后，继续下一簇的时间序候选。  
-5. **有效候选过滤**：排除 `IsCleared`、已被其他 finger 占用（reserved）、已过期（不能再接受触摸）的 note。  
-6. **同帧多指安全**：Touchable 按帧刷新 + `TryClear` 对已 clear 返回 `true` 的吞指问题必须堵住（见 §8）。  
-7. **无重叠时**与 `#187` 之后的 main 行为一致。
+1. **候选集 = 消耗点击的 select note  only**：`TouchableNormalNotes`（Click / CDrag head / Flick）。Drag / Hold **不得**进入成簇 / 簇内 x 排序。  
+2. **单调拍序**（select）：按 `effectiveNoteTime` 升序成簇、按簇处理；非同簇时不可跳过更早仍可接受的 note。  
+3. **15ms NoteGap 簇**（note-to-note）：同 tick / `has_sibling` 真双押（间距 0）稳定覆盖；极小错位伪双可进簇；默认不把 20–40ms 纵连并成一簇。  
+4. **簇内空间优先**：`|touchX − renderedNoteCenterX|` → `effectiveNoteTime` → `id`。位置取 **实际渲染 / collider 中心**，**不用** 原始 `Model.x`。  
+5. **软续扫**：簇内候选全部拒绝后，继续下一簇的时间序候选。  
+6. **有效候选过滤**（select）：排除 `IsCleared`、已被其他 finger 占用的 Flick、既有 ExtraBucketPredicate（`collidedDrag` 抑制、跨页过早等）。  
+7. **同帧多指安全**：Touchable 按帧刷新 + `TryClear` 对已 clear 返回 `false`（见 §8）；Drag/Hold 扫描亦跳过 `IsCleared`。  
+8. **无 select 重叠时**与 `#187` 之后的 main 行为一致；Drag/Hold 路径与 `#187` 列表序语义一致（不成簇）。
 
 ### 2.2 Non-goals
 
@@ -75,7 +80,8 @@ Perfect 带（±40ms）是 **触摸相对 note** 的等级窗，不是 **note �
 - Lab `JudgeFromModel` 去重（另任务；实机触摸路径以本文为准）。  
 - 按刷新率动态改 15ms。  
 - 首版「经典选择序」玩家开关（投诉集中再加）。  
-- Drag 与 Normal **合并**成同一竞争集（仍分桶；桶内用本文规则）。
+- **对 Drag / Hold 应用本文成簇或簇内 x**（明确排除；保持列表序）。  
+- Drag 与 Normal **合并**成同一竞争集。
 
 ### 2.3 成功标准
 
@@ -115,23 +121,24 @@ public const float NoteClusterGapSeconds = 0.015f; // 15ms；测试可扫 12 / 1
 - **不要** 按刷新率缩放。  
 - 15ms 是保守首发值，不一定数学最优；发版前用固定默认 + 可选内部调参，不写进玩家设置（首版）。
 
-### 4.2 收集有效碰撞候选
+### 4.2 收集有效碰撞候选（仅 select）
 
-对某一桶（Drag / Normal / Hold）与触点 `p`：
+成簇候选 **只** 从 `TouchableNormalNotes` 收集（Click / CDrag head / Flick）。对触点 `p`：
 
 ```
 C = { n |
-      n ∈ TouchableBucket
+      n ∈ TouchableNormalNotes
       ∧ n ≠ null
       ∧ !n.IsCleared
-      ∧ !ReservedByOtherFinger(n, finger)
       ∧ DoesCollide(n, p)
-      ∧ ExtraBucketPredicate(n)   // 现有 Flick 占用、collidedDrag 抑制、跨页过早等
-      ∧ CanAcceptTouch(n)         // 未过期：CalculateGrade≠None 或类型自定义 early 拒绝之前的「可尝试」语义
+      ∧ ExtraBucketPredicate(n)   // Flick 未 reserved；collidedDrag 抑制；跨页过早等
+      ∧ CanAcceptTouch(n)         // 建议：等级窗外 / 类型拒绝前不进 C，避免占坑
     }
 ```
 
-`CanAcceptTouch`：与现有 `OnTouch` 早期 `return false`（如 Drag 过早）及等级窗一致——**不能接受的不要进排序**，避免占坑；具体可与 `TryClear` 前条件对齐，避免双重真相（实现时抽一小函数）。
+**Drag / Hold：** 不构建 `C`、不调用成簇排序；各自桶内按列表序 + `DoesCollide` + `#187` 式 `OnTouch`/`绑定` 续扫（并跳过 `IsCleared`）。
+
+`CanAcceptTouch`（select）：与 `OnTouch` / `TryClear` 前「可尝试」语义对齐——**不能接受的不要进排序**；开放问题见 §12。
 
 ### 4.3 成簇（禁止链式扩张）
 
@@ -184,7 +191,7 @@ for cluster in clusters:
 
 - 使用 **实际显示位置**：优先 `Collider.bounds.center`（与 `DoesCollide`/`OverlapPoint` 一致），或等价的当前 `transform` 世界/本地 x（与 InputController 触点坐标系一致）。  
 - **禁止** 仅用 chart `Model.x` / 未应用 Override·Storyboard 位移前的原始坐标。  
-- Drag 头插值移动中：以当前帧碰撞体中心为准。
+- 仅用于 **select** 簇内仲裁；Drag 移动中的插值位置不进入本文排序。
 
 ### 4.6 HitDelta 残留职责
 
@@ -198,9 +205,9 @@ for cluster in clusters:
 
 ---
 
-## 5. 场景演算
+## 5. 场景演算（select note）
 
-设 offset=0，触点同时命中下列 note。
+设 offset=0，触点同时命中下列 **Click（或同桶 select）** note。Drag/Hold 不适用下表。
 
 | 场景 | Notes (effectiveTime, x) | 期望 |
 |------|--------------------------|------|
@@ -216,12 +223,14 @@ for cluster in clusters:
 
 ## 6. 与 note 类型 / 分桶
 
-| 类型 | 桶 | 规则 |
-|------|----|------|
-| Click / CDrag head | Normal · Down | 全文算法 |
-| Flick | Normal · Down 绑定 | 排除已 reserved；Update 仍走既有 flick 路径 |
-| Drag* | Drag · Down/Update | **桶内**用本文；仍 **先于** Normal 整桶（不跨类型统一竞争） |
-| Hold / LongHold | Hold · Update | 绑定重叠时用本文；Down 不进 Hold（`#187`） |
+| 类型 | 是否消耗离散点击 | 桶 | 规则 |
+|------|------------------|----|------|
+| Click / CDrag head | **是**（select） | Normal · Down | **本文成簇 + 簇内 x** |
+| Flick | **是**（Down 绑定） | Normal · Down | **本文**；排除已 reserved；Update 仍走既有 flick 路径 |
+| Drag* / CDrag child | 否（持续接触） | Drag · Down/Update | **列表序**；仍 **先于** select 整桶查 Drag（`collidedDrag` 抑制保留） |
+| Hold / LongHold | 否（Update 绑定） | Hold · Update | **列表序**；Down 不进 Hold（`#187`） |
+
+判定：「候选区只含消耗点击事件的 note」⇔ 成簇算法的输入 = select 集合；Drag/Hold 不是 select。
 
 `collidedDrag`、跨页过早等 **ExtraBucketPredicate** 保留；不在本 PR 改 `JudgmentOffset` 是否写入 `collidedDrag` 抑制（另开清理任务）。
 
@@ -272,6 +281,7 @@ for cluster in clusters:
 | 簇内拒绝后硬停止、不扫后簇 | **否决**（与软续扫相反） |
 | 15ms 随 fps 变化 | **否决** |
 | 本阶段跨 Drag/Normal 统一竞争 | **延后** Phase 2 |
+| 对 Drag / Hold 成簇或簇内 x | **否决（本轮）**：候选仅消耗点击的 select note |
 
 ---
 
@@ -311,25 +321,24 @@ for cluster in clusters:
 |------|------|------|
 | Phase 0 | `#187` input-consume | main 已合 |
 | Phase 1a | IsCleared / reserved 过滤 + TryClear 语义修正 | **已实现（本分支）** |
-| Phase 1b | effectiveNoteTime 成簇 + 15ms + 簇内 x | **已实现（本分支）** |
-| Phase 2 | 可选：触点距离次级键扩展；跨类型统一竞争 | 未开始 |
+| Phase 1b | select（Normal）上 effectiveNoteTime 成簇 + 15ms + 簇内 x；Drag/Hold 退出成簇 | **已实现（本分支）** |
+| Phase 2 | 可选：触点距离次级键扩展；跨类型统一竞争；Drag/Hold 若另需仲裁则单独立项 | 未开始 |
 | Phase 3 | JudgmentResolver（B4） | 中长期 |
 
 ---
 
 ## 12. 开放问题
 
-1. **`CanAcceptTouch` 与 `CalculateGrade()==None` 是否完全等价？**  
-   Drag 的 0.31s 早触拒绝等需并入收集谓词，避免进簇占位。实现时列一张类型表。  
+1. **`CanAcceptTouch` 与 `CalculateGrade()==None` 是否完全等价？（select）**  
+   Click / CDrag head / Flick 的早期拒绝与等级窗外须列类型表，避免进簇占坑。Drag 早触拒绝 **不再** 进入成簇谓词（Drag 已退出本文）。  
 
-2. **Hold 绑定是否也要「未过期」？**  
-   建议与现网可绑定窗口对齐，避免改变长按手感。  
-
-3. **簇内第二键用 `effectiveNoteTime` 还是 HitDelta？**  
+2. **簇内第二键用 `effectiveNoteTime` 还是 HitDelta？**  
    本文：同簇已近同时，用 `effectiveNoteTime` 稳定；HitDelta 不做簇内主键。  
 
-4. **playEvents 是否记录 `hitSelectionVersion=2`？**  
-   建议有 telemetry 时加上；非阻断。
+3. **playEvents 是否记录 `hitSelectionVersion=2`？**  
+   建议有 telemetry 时加上；非阻断。  
+
+4. ~~Hold 绑定「未过期」~~ — **不适用**：Hold 不在成簇范围。
 
 ---
 
@@ -339,12 +348,13 @@ for cluster in clusters:
 
 | 中文 | 含义 |
 |------|------|
-| 判定优化 | 本文 Phase 1（选择层） |
+| 判定优化 | 本文 Phase 1（select 选择层） |
+| select note | 消耗离散点击：Click / CDrag head / Flick（`TouchableNormalNotes`） |
 | 判定重构 | B4 resolver，非本分支 |
 | HitDelta | 触摸↔note 时间差绝对值 |
 | NoteGap | note↔note 时间差 |
 | effectiveNoteTime | `start_time + JudgmentOffset` |
-| 簇 / cluster | NoteGap 跨度 ≤15ms 的同拍集合 |
+| 簇 / cluster | select 候选上 NoteGap 跨度 ≤15ms 的同拍集合 |
 | 软续扫 | 簇拒绝后继续下一簇 |
 | 跳拍 | 后 note 越过仍可打的前 note |
 
@@ -365,7 +375,8 @@ for cluster in clusters:
 | 初稿 | `|Δt|` 主键 + Perfect 40ms cluster 硬截断 |
 | 2026-07-27 17:24 | 提出 HitDelta/NoteGap 分离、15ms、簇内 x；软截断 |
 | 2026-07-27 17:30 | **定稿方向**：弃用 `|Δt|` 主键；`effectiveNoteTime` 单调拍序；跨度约束成簇；簇内 x；Δt 仅等级/可接受性 |
+| 2026-07-27 | **范围收窄**：成簇候选仅 select（消耗点击）；Drag / Hold 退出成簇，保持列表序 |
 
 ---
 
-*实现以本文为准；分支已按 Phase 1a/1b 重写。合入前完成 §10 验证。*
+*实现以本文为准；分支已按 Phase 1a/1b（select-only）调整。合入前完成 §10 验证。*
