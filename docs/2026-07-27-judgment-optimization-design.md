@@ -7,18 +7,20 @@
 | **工作分支** | `fix/judgment-optimization`（`origin` → ky-reflection/Cytoid） |
 | **基线（upstream main）** | 已含 `#187` input-consume；**尚不含**本优化 |
 | **前置依赖** | [Cytoid/Cytoid#187](https://github.com/Cytoid/Cytoid/pull/187) |
-| **影响面** | 主改 `InputController` **select 路径**（Click / CDrag head / Flick）；Drag / Hold **不进**成簇候选；排除 `IsCleared`；**不改**等级窗口与计分 |
+| **影响面** | 主改 `InputController`：**Click/CDrag head** 成簇；**Flick 列表序对齐 `#187`**；Drag/Hold 不成簇；排除 `IsCleared`；**不改**等级窗口与计分 |
 | **门禁归属** | Track B → 验证后按需 Track C backport；默认不塞进 2.1.5 A1 |
 
 ---
 
 ## 0. 一句话结论
 
-**范围：仅消耗离散点击（`FingerDown` → clear / Flick 绑定）的 select note**——`TouchableNormalNotes`：Click、CDrag head、Flick。
+**范围：仅对 Click / CDrag head 做成簇选择**（`FingerDown` → `OnTouch`/`TryClear`）。
 
-**不在范围：Drag\*、Hold / LongHold。** 它们是持续接触 / 绑定，不「消耗一次点击」；保持既有列表序扫描（仍先于 select 查 Drag；Hold 仅 `FingerUpdate`）。
+**Flick：与 `#187` 原本对齐**——按 `TouchableNormalNotes` **列表序**绑定；不参与 time/x 成簇。列表序遍历时，Flick 之前积压的 Click 段先按本文成簇尝试（软续扫），全部拒绝后再绑 Flick，从而保持「列表中更早的 Click 优先于更晚的 Flick」的原优先级。
 
-重叠 hitbox 的 **select** 候选上：
+**不在成簇范围：Drag\*、Hold / LongHold。** 持续接触 / 绑定；列表序扫描（仍先于 select 查 Drag；Hold 仅 `FingerUpdate`）。
+
+重叠 hitbox 的 **Click / CDrag head** 候选上：
 
 1. **拍序主键** = `effectiveNoteTime` 升序（先打仍可判定的更早 note，禁止无故「跳拍」）；
 2. **同拍识别** = note-to-note `NoteGap ≤ 15ms` 且 **簇跨度** `maxTime − minTime ≤ 15ms`（禁止相邻差链式扩张）；
@@ -27,7 +29,7 @@
 
 `HitDelta`（触摸相对 note 的 `|Δt|`）**退出候选排序主键**，只服务等级、early/late、可否接受触摸、日志。
 
-这是 **select 命中选择优化**，不是 JudgmentResolver / 计分重构（B4），也不是 Drag/Hold 仲裁重写。
+这是 **Click 命中选择优化**（Flick/Drag/Hold 路径对齐原行为），不是 JudgmentResolver / 计分重构（B4）。
 
 ---
 
@@ -64,14 +66,15 @@ Perfect 带（±40ms）是 **触摸相对 note** 的等级窗，不是 **note �
 
 ### 2.1 Must
 
-1. **候选集 = 消耗点击的 select note  only**：`TouchableNormalNotes`（Click / CDrag head / Flick）。Drag / Hold **不得**进入成簇 / 簇内 x 排序。  
-2. **单调拍序**（select）：按 `effectiveNoteTime` 升序成簇、按簇处理；非同簇时不可跳过更早仍可接受的 note。  
-3. **15ms NoteGap 簇**（note-to-note）：同 tick / `has_sibling` 真双押（间距 0）稳定覆盖；极小错位伪双可进簇；默认不把 20–40ms 纵连并成一簇。  
-4. **簇内空间优先**：`|touchX − renderedNoteCenterX|` → `effectiveNoteTime` → `id`。位置取 **实际渲染 / collider 中心**，**不用** 原始 `Model.x`。  
-5. **软续扫**：簇内候选全部拒绝后，继续下一簇的时间序候选。  
-6. **有效候选过滤**（select）：排除 `IsCleared`、已被其他 finger 占用的 Flick、既有 ExtraBucketPredicate（`collidedDrag` 抑制、跨页过早等）。  
-7. **同帧多指安全**：Touchable 按帧刷新 + `TryClear` 对已 clear 返回 `false`（见 §8）；Drag/Hold 扫描亦跳过 `IsCleared`。  
-8. **无 select 重叠时**与 `#187` 之后的 main 行为一致；Drag/Hold 路径与 `#187` 列表序语义一致（不成簇）。
+1. **候选集（成簇）= Click / CDrag head only**：Flick **不进**成簇；按列表序绑定（见 §6）。Drag / Hold **不得**进入成簇 / 簇内 x 排序。  
+2. **Flick 与原本对齐**：`TouchableNormalNotes` 列表序；遇 Flick 前先冲刷此前积压的 Click 簇；reserved 检查与 `#187` 相同；Update/Up 路径不变。  
+3. **单调拍序**（Click）：按 `effectiveNoteTime` 升序成簇、按簇处理；非同簇时不可跳过更早仍可接受的 note。  
+4. **15ms NoteGap 簇**（note-to-note）：同 tick / `has_sibling` 真双押（间距 0）稳定覆盖；极小错位伪双可进簇；默认不把 20–40ms 纵连并成一簇。  
+5. **簇内空间优先**：`|touchX − renderedNoteCenterX|` → `effectiveNoteTime` → `id`。位置取 **实际渲染 / collider 中心**，**不用** 原始 `Model.x`。  
+6. **软续扫**：簇内候选全部拒绝后，继续下一簇的时间序候选；整段 Click 拒绝后再尝试列表中后续 Flick。  
+7. **有效候选过滤**（Click）：排除 `IsCleared`、既有 ExtraBucketPredicate（`collidedDrag` 抑制、跨页过早等）。  
+8. **同帧多指安全**：Touchable 按帧刷新 + `TryClear` 对已 clear 返回 `false`（见 §8）；Drag/Hold/Flick 扫描亦跳过 `IsCleared` / reserved。  
+9. **无 Click 重叠时**与 `#187` 之后的 main 行为一致；Flick/Drag/Hold 与 `#187` 列表序语义一致。
 
 ### 2.2 Non-goals
 
@@ -80,6 +83,7 @@ Perfect 带（±40ms）是 **触摸相对 note** 的等级窗，不是 **note �
 - Lab `JudgeFromModel` 去重（另任务；实机触摸路径以本文为准）。  
 - 按刷新率动态改 15ms。  
 - 首版「经典选择序」玩家开关（投诉集中再加）。  
+- **对 Flick 应用本文成簇或簇内 x**（明确排除；列表序绑定，对齐 `#187`）。  
 - **对 Drag / Hold 应用本文成簇或簇内 x**（明确排除；保持列表序）。  
 - Drag 与 Normal **合并**成同一竞争集。
 
@@ -121,24 +125,30 @@ public const float NoteClusterGapSeconds = 0.015f; // 15ms；测试可扫 12 / 1
 - **不要** 按刷新率缩放。  
 - 15ms 是保守首发值，不一定数学最优；发版前用固定默认 + 可选内部调参，不写进玩家设置（首版）。
 
-### 4.2 收集有效碰撞候选（仅 select）
+### 4.2 收集有效碰撞候选（仅 Click / CDrag head 段）
 
-成簇候选 **只** 从 `TouchableNormalNotes` 收集（Click / CDrag head / Flick）。对触点 `p`：
+`OnFingerDown` **按 `TouchableNormalNotes` 列表序**扫描：
+
+- 遇 **Flick**：先对当前积压的 Click 段调用成簇 Accept；若无人接受，再按 `#187` 做 reserved 检查并 `StartFlicking`（绑定即消费 Down）。  
+- 遇 **Click / CDrag head**：通过 ExtraBucketPredicate 后加入当前段 `C`（不成交，先积压）。  
+- 扫描结束：对剩余 Click 段成簇 Accept。
+
+成簇输入：
 
 ```
 C = { n |
-      n ∈ TouchableNormalNotes
+      n ∈ 当前列表段内的 Click/CDrag head
       ∧ n ≠ null
       ∧ !n.IsCleared
       ∧ DoesCollide(n, p)
-      ∧ ExtraBucketPredicate(n)   // Flick 未 reserved；collidedDrag 抑制；跨页过早等
-      ∧ CanAcceptTouch(n)         // 建议：等级窗外 / 类型拒绝前不进 C，避免占坑
+      ∧ ExtraBucketPredicate(n)   // collidedDrag 抑制；跨页过早等
+      ∧ CanAcceptTouch(n)         // 建议：等级窗外不进 C
     }
 ```
 
-**Drag / Hold：** 不构建 `C`、不调用成簇排序；各自桶内按列表序 + `DoesCollide` + `#187` 式 `OnTouch`/`绑定` 续扫（并跳过 `IsCleared`）。
+**Flick / Drag / Hold：** 不构建 `C`、不调用成簇排序。
 
-`CanAcceptTouch`（select）：与 `OnTouch` / `TryClear` 前「可尝试」语义对齐——**不能接受的不要进排序**；开放问题见 §12。
+`CanAcceptTouch`（Click）：与 `OnTouch` / `TryClear` 前「可尝试」语义对齐；开放问题见 §12。
 
 ### 4.3 成簇（禁止链式扩张）
 
@@ -223,16 +233,16 @@ for cluster in clusters:
 
 ## 6. 与 note 类型 / 分桶
 
-| 类型 | 是否消耗离散点击 | 桶 | 规则 |
-|------|------------------|----|------|
-| Click / CDrag head | **是**（select） | Normal · Down | **本文成簇 + 簇内 x** |
-| Flick | **是**（Down 绑定） | Normal · Down | **本文**；排除已 reserved；Update 仍走既有 flick 路径 |
-| Drag* / CDrag child | 否（持续接触） | Drag · Down/Update | **列表序**；仍 **先于** select 整桶查 Drag（`collidedDrag` 抑制保留） |
-| Hold / LongHold | 否（Update 绑定） | Hold · Update | **列表序**；Down 不进 Hold（`#187`） |
+| 类型 | FingerDown | 规则 |
+|------|------------|------|
+| Click / CDrag head | clear | **本文成簇 + 簇内 x**（仅在列表段内，段边界为 Flick） |
+| Flick | 绑定 | **`#187` 列表序**；不进成簇；Update/Up 不变 |
+| Drag* / CDrag child | 持续接触 | **列表序**；仍 **先于** Normal 查 Drag |
+| Hold / LongHold | Update 绑定 | **列表序**；Down 不进 Hold（`#187`） |
 
-判定：「候选区只含消耗点击事件的 note」⇔ 成簇算法的输入 = select 集合；Drag/Hold 不是 select。
+Click↔Flick 优先级：由 `TouchableNormalNotes` **列表序**决定（与原本相同）。成簇只重排「两个 Flick 之间（或首尾）的 Click 段」，不会把更晚的 Flick 提到更早的 Click 之前，也不会把 Flick 按 x/time 重排。
 
-`collidedDrag`、跨页过早等 **ExtraBucketPredicate** 保留；不在本 PR 改 `JudgmentOffset` 是否写入 `collidedDrag` 抑制（另开清理任务）。
+`collidedDrag`、跨页过早等对 **Click** 的 ExtraBucketPredicate 保留；Flick 仍不走这些过滤（与原本一致）。
 
 ---
 
@@ -281,7 +291,9 @@ for cluster in clusters:
 | 簇内拒绝后硬停止、不扫后簇 | **否决**（与软续扫相反） |
 | 15ms 随 fps 变化 | **否决** |
 | 本阶段跨 Drag/Normal 统一竞争 | **延后** Phase 2 |
-| 对 Drag / Hold 成簇或簇内 x | **否决（本轮）**：候选仅消耗点击的 select note |
+| 对 Flick 成簇或簇内 x | **否决**：Flick 列表序绑定，对齐 `#187` |
+| 对 Drag / Hold 成簇或簇内 x | **否决（本轮）** |
+| 先扫完全部 Flick 再扫 Click（或相反） | **否决**：会破坏列表序下 Click↔Flick 原优先级 |
 
 ---
 
@@ -321,7 +333,7 @@ for cluster in clusters:
 |------|------|------|
 | Phase 0 | `#187` input-consume | main 已合 |
 | Phase 1a | IsCleared / reserved 过滤 + TryClear 语义修正 | **已实现（本分支）** |
-| Phase 1b | select（Normal）上 effectiveNoteTime 成簇 + 15ms + 簇内 x；Drag/Hold 退出成簇 | **已实现（本分支）** |
+| Phase 1b | Click/CDrag head 成簇 + 15ms + 簇内 x；Flick 列表序对齐 `#187`；Drag/Hold 退出成簇 | **已实现（本分支）** |
 | Phase 2 | 可选：触点距离次级键扩展；跨类型统一竞争；Drag/Hold 若另需仲裁则单独立项 | 未开始 |
 | Phase 3 | JudgmentResolver（B4） | 中长期 |
 
@@ -329,8 +341,8 @@ for cluster in clusters:
 
 ## 12. 开放问题
 
-1. **`CanAcceptTouch` 与 `CalculateGrade()==None` 是否完全等价？（select）**  
-   Click / CDrag head / Flick 的早期拒绝与等级窗外须列类型表，避免进簇占坑。Drag 早触拒绝 **不再** 进入成簇谓词（Drag 已退出本文）。  
+1. **`CanAcceptTouch` 与 `CalculateGrade()==None` 是否完全等价？（Click）**  
+   Click / CDrag head 的早期拒绝与等级窗外须列类型表，避免进簇占坑。Flick/Drag 不进成簇谓词。  
 
 2. **簇内第二键用 `effectiveNoteTime` 还是 HitDelta？**  
    本文：同簇已近同时，用 `effectiveNoteTime` 稳定；HitDelta 不做簇内主键。  
@@ -348,8 +360,9 @@ for cluster in clusters:
 
 | 中文 | 含义 |
 |------|------|
-| 判定优化 | 本文 Phase 1（select 选择层） |
-| select note | 消耗离散点击：Click / CDrag head / Flick（`TouchableNormalNotes`） |
+| 判定优化 | 本文 Phase 1（Click 选择层；Flick 对齐原列表序） |
+| select / Click 段 | FingerDown → TryClear 的 Click / CDrag head；成簇仅作用于这些 |
+| Flick 绑定 | `#187` 列表序 `StartFlicking`；不成簇 |
 | 判定重构 | B4 resolver，非本分支 |
 | HitDelta | 触摸↔note 时间差绝对值 |
 | NoteGap | note↔note 时间差 |
@@ -375,7 +388,8 @@ for cluster in clusters:
 | 初稿 | `|Δt|` 主键 + Perfect 40ms cluster 硬截断 |
 | 2026-07-27 17:24 | 提出 HitDelta/NoteGap 分离、15ms、簇内 x；软截断 |
 | 2026-07-27 17:30 | **定稿方向**：弃用 `|Δt|` 主键；`effectiveNoteTime` 单调拍序；跨度约束成簇；簇内 x；Δt 仅等级/可接受性 |
-| 2026-07-27 | **范围收窄**：成簇候选仅 select（消耗点击）；Drag / Hold 退出成簇，保持列表序 |
+| 2026-07-27 | **范围收窄**：成簇候选仅 Click/CDrag head；Drag/Hold 退出 |
+| 2026-07-27 | **Flick 对齐原本**：列表序绑定；成簇仅作用于 Flick 之间的 Click 段 |
 
 ---
 

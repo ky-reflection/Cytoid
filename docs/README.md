@@ -6,7 +6,7 @@ Stable references tracked in git. Work-in-progress notes live in `docs/local/` (
 
 | Document | Purpose |
 |----------|---------|
-| [2026-07-27-judgment-optimization-design.md](2026-07-27-judgment-optimization-design.md) | **判定优化设计**：select note（Click/CDrag head/Flick）上 effectiveNoteTime 拍序 + 15ms 簇 + 簇内 x；Drag/Hold 不进候选（分支 `fix/judgment-optimization`） |
+| [2026-07-27-judgment-optimization-design.md](2026-07-27-judgment-optimization-design.md) | **判定优化设计**：Click/CDrag head 上 effectiveNoteTime 拍序 + 15ms 簇 + 簇内 x；Flick 列表序对齐 `#187`；Drag/Hold 不进候选 |
 
 ## Bridge / Flutter plugin
 
