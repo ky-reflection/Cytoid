@@ -112,15 +112,27 @@ public class InputController : MonoBehaviour
             break;
         }
 
-        // Select notes: Flick keeps list-order bind. Click/CDrag head + unheld Hold share
-        // note-time clusters (Hold loses to Click within a cluster; earlier clusters win).
-        // Walking TouchableNormalNotes in list order preserves Click-vs-Flick priority
-        // from #187 (earlier list entry wins after soft fallthrough).
+        // Select notes: merge Hold into the same SpawnedNotes (id) order stream as
+        // Click/CDrag head/Flick. Flick keeps list-order bind (#187): only candidates
+        // earlier in that stream are flushed before a Flick bind. Click/CDrag head +
+        // unheld Hold still share note-time clusters (Hold loses within a cluster).
         hitCandidates.Clear();
-        AppendEligibleHoldCandidates(pressedPosition, finger, collidedDrag);
-
-        foreach (var note in TouchableNormalNotes)
+        var holdIndex = 0;
+        var normalIndex = 0;
+        while (holdIndex < TouchableHoldNotes.Count || normalIndex < TouchableNormalNotes.Count)
         {
+            Note note;
+            if (normalIndex >= TouchableNormalNotes.Count ||
+                (holdIndex < TouchableHoldNotes.Count &&
+                 TouchableHoldNotes[holdIndex].Model.id < TouchableNormalNotes[normalIndex].Model.id))
+            {
+                note = TouchableHoldNotes[holdIndex++];
+            }
+            else
+            {
+                note = TouchableNormalNotes[normalIndex++];
+            }
+
             if (note == null || note.IsCleared) continue;
             if (!note.DoesCollide(pressedPosition)) continue;
 
@@ -135,24 +147,21 @@ public class InputController : MonoBehaviour
                 return;
             }
 
+            if (note is HoldNote holdNote)
+            {
+                // Live check: TouchableHoldNotes is a per-frame snapshot; same-frame
+                // multi-finger rebind stays on FingerUpdate.
+                if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index)) continue;
+                if (!IsEligibleFingerDownTapTarget(holdNote, finger, collidedDrag)) continue;
+                hitCandidates.Add(holdNote);
+                continue;
+            }
+
             if (!IsEligibleFingerDownTapTarget(note, finger, collidedDrag)) continue;
             hitCandidates.Add(note);
         }
 
         TryAcceptSelectClickCluster(finger, pressedPosition.x);
-    }
-
-    private void AppendEligibleHoldCandidates(Vector2 worldPos, GameFinger finger, bool collidedDrag)
-    {
-        if (HoldingNotes.ContainsKey(finger.Index)) return;
-
-        foreach (var note in TouchableHoldNotes)
-        {
-            if (note == null || note.IsCleared) continue;
-            if (!note.DoesCollide(worldPos)) continue;
-            if (!IsEligibleFingerDownTapTarget(note, finger, collidedDrag)) continue;
-            hitCandidates.Add(note);
-        }
     }
 
     private bool IsEligibleFingerDownTapTarget(Note note, GameFinger finger, bool collidedDrag)
@@ -180,7 +189,8 @@ public class InputController : MonoBehaviour
         {
             if (note is HoldNote holdNote)
             {
-                if (HoldingNotes.ContainsKey(finger.Index)) continue;
+                // Reject holds already bound this frame (stale TouchableHoldNotes snapshot).
+                if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index)) continue;
                 HoldingNotes.Add(finger.Index, holdNote);
                 holdNote.UpdateFinger(finger.Index, true);
                 hitCandidates.Clear();
