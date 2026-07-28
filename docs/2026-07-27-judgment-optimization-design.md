@@ -159,6 +159,7 @@ return IsCleared;
 | 同帧双指 | 第二指不被已 clear 吞 |
 | Storyboard 位移 | x 用 collider 中心，非 `Model.x` |
 | Flick 与更早 Click 段 | 先尝试更早段；拒绝后再绑 Flick |
+| Drag 命中 + 过远 Flick | Flick 不绑（Eligible / `collidedDrag`） |
 
 ---
 
