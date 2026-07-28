@@ -87,7 +87,9 @@ public const float NoteClusterGapSeconds = 0.015f; // 固定 15ms，不随刷新
    跳过 null / IsCleared / 未碰撞
    if Flick:
        if TryAcceptSelectClickCluster(...): return   // 冲刷前段 Click+Hold
-       reserved 检查后 StartFlicking；return
+       reserved 检查后
+       if !Eligible(...): skip                       // collidedDrag / 跨页（与 Click/Hold 同）
+       StartFlicking；return
    if Hold:
        if IsHolding 或 finger 已在 HoldingNotes: skip
        if !Eligible(...): skip
@@ -99,7 +101,7 @@ public const float NoteClusterGapSeconds = 0.015f; // 固定 15ms，不随刷新
 3) TryAcceptSelectClickCluster(...)  // 冲刷尾段
 ```
 
-`Eligible`（Click/Hold）：`collidedDrag` 过远抑制；跨页过早抑制（与历史一致）。Flick **不走**这些过滤。
+`Eligible`（Click/Hold/**Flick**）：`collidedDrag` 过远抑制；跨页过早抑制。Flick 仍不进成簇，但绑定前与 Click/Hold 共用同一门闩（Drag 命中后过远 Flick 不再绑）。
 
 ### 3.3 `TryAcceptSelectClickCluster`
 
@@ -139,7 +141,7 @@ return IsCleared;
 | Drag* / CDrag child | 擦判 | 列表序；先于 select；不成簇 |
 | Click / CDrag head | clear | 与 Hold 同成簇池；簇内优先于 Hold |
 | Hold / LongHold | 绑定并消费 | 合流进 id 流；成簇；簇内低于 Click；Update 可滑入 |
-| Flick | 绑定 | 合流 id 流上列表序；不进成簇；前段先冲刷 |
+| Flick | 绑定 | 合流 id 流上列表序；不进成簇；前段先冲刷；绑前走 Eligible（含 `collidedDrag`） |
 
 **Click↔Flick：** 由合流后的 **id 序**决定（Hold 插入同序）。遇 Flick 只冲刷 **流中更早** 的积压候选，不会把更晚 Flick 提到更早 Click 之前。
 
@@ -226,7 +228,8 @@ return IsCleared;
 | 07-27 | 曾收窄为仅 Click；Flick 列表序 |
 | 07-28 | Hold 重回 Down；簇内低于 Click；消费 Down |
 | 07-28 | **文档对齐实现**：Hold 与 Normal 按 id 合流后再遇 Flick 冲刷 |
+| 07-28 | Flick 绑前也走 `Eligible`（`collidedDrag` 过远 + 跨页），与 Click/Hold 对齐 |
 
 ---
 
-*本文与 `fix/judgment-optimization` 上 `InputController` 实现一致。合入前完成 §8 手测。*
+*本文与当前分支上 `InputController` 实现一致。合入前完成 §8 手测。*

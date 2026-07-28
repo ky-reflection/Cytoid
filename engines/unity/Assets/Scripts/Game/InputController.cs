@@ -116,6 +116,7 @@ public class InputController : MonoBehaviour
         // Click/CDrag head/Flick. Flick keeps list-order bind (#187): only candidates
         // earlier in that stream are flushed before a Flick bind. Click/CDrag head +
         // unheld Hold still share note-time clusters (Hold loses within a cluster).
+        // Flick bind also uses IsEligibleFingerDownTapTarget (collidedDrag / cross-page).
         hitCandidates.Clear();
         var holdIndex = 0;
         var normalIndex = 0;
@@ -142,6 +143,8 @@ public class InputController : MonoBehaviour
 
                 if (FlickingNotes.ContainsKey(finger.Index) || FlickingNotes.ContainsValue(flickNote))
                     continue;
+                // Same collidedDrag / cross-page gates as Click/Hold (was Flick-exempt).
+                if (!IsEligibleFingerDownTapTarget(flickNote, finger, collidedDrag)) continue;
                 FlickingNotes.Add(finger.Index, flickNote);
                 flickNote.StartFlicking(pressedPosition);
                 return;
