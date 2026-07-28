@@ -111,13 +111,22 @@ public class InputController : MonoBehaviour
             : game.camera.ScreenToWorldPoint(new Vector3(finger.ScreenPosition.x, finger.ScreenPosition.y, 10));
 
         // Drag clears first (settlement order) but does not consume the Down for select.
-        // Record the accepted Drag so select can apply the DragCoHit window gate.
+        // Record acceptedDrag only for a real hit grade — TryClear also returns true on Miss.
         Note acceptedDrag = null;
         foreach (var note in TouchableDragNotes)
         {
             if (note == null || note.IsCleared) continue;
             if (!note.DoesCollide(pressedPosition)) continue;
+
+            // Snapshot before OnTouch: ShouldMiss/CalculateGrade Miss both Clear(Miss) via TryClear.
+            var preTouchGrade = note.ShouldMiss() ? NoteGrade.Miss : note.CalculateGrade();
             if (!note.OnTouch(finger.ScreenPosition)) continue;
+            if (preTouchGrade == NoteGrade.Miss)
+            {
+                // Miss-settled on this Down must not arm DragCoHit (would block later select).
+                continue;
+            }
+
             acceptedDrag = note;
             break;
         }

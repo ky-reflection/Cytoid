@@ -83,8 +83,11 @@ public const float DragCoHitWindowSeconds = 0.015f; // Drag 成功后允许同 D
 
 ```
 1) Drag 列表序：
-   碰撞且 OnTouch 成功 → acceptedDrag = note，break
-   （先 clear Drag；不 return，不独占 Down）
+   碰撞后先快照 preTouchGrade（ShouldMiss → Miss，否则 CalculateGrade）
+   OnTouch 成功：
+     preTouchGrade == Miss → 结算 Miss，**不**记 acceptedDrag，continue 扫下一颗 Drag
+     否则 → acceptedDrag = note，break
+   （先尝试 clear Drag；不 return，不独占 Down）
 
 2) 合流扫描（TouchableHoldNotes ∪ TouchableNormalNotes，按 Model.id 升序归并）：
    跳过 null / IsCleared / 未碰撞
@@ -152,7 +155,7 @@ return IsCleared;
 
 | 类型 | FingerDown | 规则 |
 |------|------------|------|
-| Drag* / CDrag child | 擦判 | 列表序；先于 select；不成簇；成功则 `acceptedDrag` |
+| Drag* / CDrag child | 擦判 | 列表序；先于 select；不成簇；**非 Miss** 成功才 `acceptedDrag` |
 | Click / CDrag head | clear | 与 Hold 同成簇池；簇内优先于 Hold；走 DragCoHit |
 | Hold / LongHold | 绑定并消费 | 合流进 id 流；成簇；簇内低于 Click；Update 可滑入；走 DragCoHit |
 | Flick | 绑定 | 合流 id 流上列表序；不进成簇；前段先冲刷；走 DragCoHit |
@@ -175,6 +178,7 @@ return IsCleared;
 | Flick 与更早 Click 段 | 先尝试更早段；拒绝后再绑 Flick |
 | Drag + select ≤15ms（含更早） | 同 Down 可继续处理 select |
 | Drag + select 晚 >15ms（含 Flick） | select 阻断；Flick 仍先冲刷前段 |
+| 触摸已过窗 Drag → Miss | 可结算 Miss，但**不**记 acceptedDrag；不挡当前 Click/Flick |
 
 ---
 
@@ -213,6 +217,7 @@ return IsCleared;
 | T8 | JudgmentOffset ≠ 0 |
 | T9 | Storyboard 位移 x |
 | T10 | Drag + 同窗 ≤15ms Click/Flick 可同 Down；晚 >15ms 阻断（含 Flick，前段仍冲刷） |
+| T11 | 过窗 Drag 被触摸判 Miss 时不记 acceptedDrag，不挡同位置当前 Click/Flick |
 
 调参对比 12/15/20ms，默认锁 15。
 
@@ -246,6 +251,7 @@ return IsCleared;
 | 07-28 | Hold 重回 Down；簇内低于 Click；消费 Down |
 | 07-28 | **文档对齐实现**：Hold 与 Normal 按 id 合流后再遇 Flick 冲刷 |
 | 07-28 | **DragCoHit**：`acceptedDrag` + 15ms 晚于窗阻断 Click/CDrag head/Hold/Flick；删除 `collidedDrag + Page.Duration/8`；Flick 阻断前仍冲刷前段 |
+| 07-28 | **acceptedDrag 仅非 Miss**：`OnTouch`/`TryClear` 对 Miss 也返回 true；过窗触摸结算 Miss 不得武装 DragCoHit |
 
 ---
 
