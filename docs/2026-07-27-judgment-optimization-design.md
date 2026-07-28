@@ -238,14 +238,14 @@ for cluster in clusters:
 
 | 类型 | FingerDown | 规则 |
 |------|------------|------|
-| Click / CDrag head | clear | **本文成簇 + 簇内 x**（仅在列表段内，段边界为 Flick） |
+| Click / CDrag head | clear | **成簇 + 簇内非 Hold 优先 + x**（列表段内，段边界为 Flick） |
+| Hold / LongHold | 绑定并消费 | **同池成簇**；簇内低于 Click；选中则 `UpdateFinger` 并消费 Down；Update 仍可滑入/多指 |
 | Flick | 绑定 | **`#187` 列表序**；不进成簇；Update/Up 不变 |
 | Drag* / CDrag child | 持续接触 | **列表序**；仍 **先于** Normal 查 Drag |
-| Hold / LongHold | Update 绑定 | **列表序**；Down 不进 Hold（`#187`） |
 
-Click↔Flick 优先级：由 `TouchableNormalNotes` **列表序**决定（与原本相同）。成簇只重排「两个 Flick 之间（或首尾）的 Click 段」，不会把更晚的 Flick 提到更早的 Click 之前，也不会把 Flick 按 x/time 重排。
+Click↔Flick 优先级：由 `TouchableNormalNotes` **列表序**决定（与原本相同）。成簇重排「两个 Flick 之间（或首尾）的 Click+Hold 段」，不会把更晚的 Flick 提到更早的 Click 之前。
 
-`collidedDrag`、跨页过早等对 **Click** 的 ExtraBucketPredicate 保留；Flick 仍不走这些过滤（与原本一致）。
+`collidedDrag`、跨页过早等对 **Click/Hold** 的 ExtraBucketPredicate 保留；Flick 仍不走这些过滤（与原本一致）。
 
 ---
 
