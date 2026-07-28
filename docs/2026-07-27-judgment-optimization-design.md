@@ -17,7 +17,7 @@
 
 `FingerDown` 上：
 
-1. **Drag** 仍先列表序扫描（不成簇）；成功 clear 后记录 `acceptedDrag`，**不**独占 Down。
+1. **Drag** 仍先列表序扫描（不成簇）；**非 Miss** 成功 clear 后记录 `acceptedDrag`，**不**独占 Down。
 2. 将 **未持有 Hold** 与 **Click / CDrag head / Flick** 按 `Model.id`（≈ `SpawnedNotes` 序）**合流**成一条扫描流。
 3. 流上遇 **Flick**：先冲刷此前积压的 Click+Hold 成簇段；无人接受再按 `#187` 列表序绑定 Flick。
 4. 积压的 **Click / CDrag head / Hold** 按 `effectiveNoteTime` 成簇（跨度 ≤ **15ms**，禁止链式扩张）；簇内 **非 Hold > Hold**，再 **渲染中心 x**，再 time，再 id；软续扫。
