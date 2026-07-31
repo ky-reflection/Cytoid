@@ -6,6 +6,50 @@ Build artifact: `.\engines\unity\build-cytoid-lab.ps1 -Package -KeepLog` → `en
 
 ---
 
+## v0.1.3
+
+**Tag:** `cytoid-lab-v0.1.3` · **Title:** Cytoid Lab v0.1.3
+
+### English
+
+Windows 10/11 x64 · Unity **6000.0.75f1** core
+
+#### What's new
+
+- **Remember viewport** — last 16:9 / 4:3 and Small / Large choice is restored after quit
+- **In-app update** — menu checks GitHub Releases; an Update button downloads `CytoidLab.zip` and restarts into the new build
+- **Window size** — keep the current window size when starting a chart and when returning to the level menu
+- **Storyboard** — restore cover opacity after timeline seek; safer parse / dispose / seek lifecycle
+- **Performance** — dirty-checked HUD text updates, AssetMemory / NLayer seek hardening, reduced GC in gameplay overlays
+
+#### Known limitations
+
+- Windows only
+- Storyboard video may still show as a still image on some charts ([#5](https://github.com/ky-reflection/Cytoid/issues/5))
+- In-app update applies from this build onward (v0.1.2 and older need a manual download once)
+
+Player log: `%USERPROFILE%\AppData\LocalLow\TigerHix\Cytoid Lab\Player.log`
+
+### 中文
+
+Windows 10/11 x64 · Unity **6000.0.75f1** core
+
+#### 更新内容
+
+- **记住 Viewport** — 退出后恢复上次的 16:9 / 4:3 与 Small / Large
+- **应用内更新** — 菜单检查 GitHub Releases；有新版本时显示 Update，下载 `CytoidLab.zip` 后重启替换
+- **窗口尺寸** — 进谱与返回菜单时保留当前窗口大小
+- **Storyboard** — timeline seek 后恢复 cover 透明度；解析 / 销毁 / seek 生命周期更稳
+- **性能** — HUD 文本脏检查、AssetMemory / NLayer seek 加固、减少 overlay GC
+
+#### 已知限制
+
+- 仅 Windows
+- 部分谱面 storyboard 视频仍可能定格 ([#5](https://github.com/ky-reflection/Cytoid/issues/5))
+- 应用内更新从此版本起生效（v0.1.2 及更早需先手动下载一次）
+
+---
+
 ## v0.1.2
 
 **Tag:** `cytoid-lab-v0.1.2` · **Title:** Cytoid Lab v0.1.2

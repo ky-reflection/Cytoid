@@ -267,6 +267,8 @@ public class CytoidLabHelpOverlay : MonoBehaviour
     {
         return "Top-right Viewport button (left of ?) — aspect 16:9 or 4:3; size Small (1280 wide, default) or Large (1920 wide). "
                + "Example: 16:9 Small = 1280×720, 16:9 Large = 1920×1080. Changes the window size; press Start to apply note/storyboard layout.\n"
+               + "Viewport choice is remembered after quit.\n"
+               + "When a newer Lab release is on GitHub, an Update button appears under the title.\n"
                + "Play area is restricted to 4:3–16:9 by default (same as the main app).";
     }
 

@@ -1,7 +1,7 @@
 # Cytoid Lab
 
 > Branch: `feature/cytoid-player` (historical name; ships **Cytoid Lab**)  
-> Version: **v0.1.2**
+> Version: **v0.1.3**
 
 **Cytoid Lab** is a Windows standalone chart preview and playtest tool built from the Unity core. It is aimed at chart authors and core developers — not at end players (use the main Cytoid app for that).
 

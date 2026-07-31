@@ -40,7 +40,11 @@ public class CytoidLabMenuController : MonoBehaviour
     private readonly Dictionary<Difficulty, Button> difficultyButtonMap = new Dictionary<Difficulty, Button>();
     private Button viewportCornerButton;
     private Text viewportCornerLabel;
+    private Button updateButton;
+    private Text updateButtonLabel;
+    private CytoidLabUpdater.UpdateInfo pendingUpdate;
     private bool isRefreshingLevelList;
+    private bool updateCheckStarted;
 
     private Level selectedLevel;
     private Difficulty selectedDifficulty;
@@ -93,6 +97,7 @@ public class CytoidLabMenuController : MonoBehaviour
         ShowGameErrorIfAny();
         await RefreshLevelList();
         ProcessCommandLineImport();
+        CheckForUpdatesInBackground();
     }
 
     private void OnEnable()
@@ -147,6 +152,17 @@ public class CytoidLabMenuController : MonoBehaviour
 
         var title = CreateText(root, $"Cytoid Lab {CytoidLabVersion.DisplayName}", TitleFontSize, TextAnchor.MiddleCenter);
         title.GetComponent<LayoutElement>().preferredHeight = 44;
+
+        updateButton = CreateButton(root, "", () => OnUpdateButtonClicked().Forget());
+        updateButton.gameObject.SetActive(false);
+        var updateLe = updateButton.GetComponent<LayoutElement>();
+        updateLe.preferredHeight = ButtonHeight;
+        var updateColors = updateButton.colors;
+        updateColors.normalColor = new Color(0.25f, 0.55f, 0.95f);
+        updateColors.highlightedColor = new Color(0.35f, 0.65f, 1f);
+        updateColors.pressedColor = new Color(0.18f, 0.42f, 0.78f);
+        updateButton.colors = updateColors;
+        updateButtonLabel = updateButton.GetComponentInChildren<Text>();
 
         selectionHintText = CreateText(root,
             DefaultSelectionHint,
@@ -261,6 +277,7 @@ public class CytoidLabMenuController : MonoBehaviour
     {
         Context.Player.Settings.HitSound = "none";
         Context.Player.Settings.RestrictPlayAreaAspectRatio = true;
+        CytoidLabPreferences.LoadInto(Context.Player.Settings);
     }
 
     private void SelectViewportPreset(string presetId)
@@ -305,6 +322,47 @@ public class CytoidLabMenuController : MonoBehaviour
     private void OpenViewportOverlay()
     {
         CytoidLabViewportOverlay.Open(canvas.transform, uiFont, SelectViewportPreset, SelectViewportSize);
+    }
+
+    private void CheckForUpdatesInBackground()
+    {
+        if (updateCheckStarted || !CytoidLabUpdater.IsSupported) return;
+        updateCheckStarted = true;
+        CheckForUpdatesAsync().Forget();
+    }
+
+    private async UniTaskVoid CheckForUpdatesAsync()
+    {
+        var info = await CytoidLabUpdater.CheckForUpdateAsync();
+        if (info == null || CytoidLabUpdater.IsDismissed(info)) return;
+
+        pendingUpdate = info;
+        if (updateButton == null) return;
+
+        if (updateButtonLabel != null)
+        {
+            var sizeMb = info.ZipSizeBytes > 0 ? $" (~{info.ZipSizeBytes / (1024f * 1024f):0} MB)" : string.Empty;
+            updateButtonLabel.text = $"Update available: v{info.Version}{sizeMb}";
+        }
+
+        updateButton.gameObject.SetActive(true);
+        SetStatus($"Cytoid Lab v{info.Version} is available. Click the update button to install.");
+    }
+
+    private async UniTaskVoid OnUpdateButtonClicked()
+    {
+        if (pendingUpdate == null)
+        {
+            Application.OpenURL(CytoidLabUpdater.ReleasesPageUrl);
+            return;
+        }
+
+        if (updateButton != null) updateButton.interactable = false;
+        var ok = await CytoidLabUpdater.DownloadAndApplyAsync(pendingUpdate, SetStatus);
+        if (!ok && updateButton != null)
+        {
+            updateButton.interactable = true;
+        }
     }
 
     private void BuildCornerButtons(Transform parent)

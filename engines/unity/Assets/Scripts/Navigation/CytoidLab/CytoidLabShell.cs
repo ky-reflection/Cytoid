@@ -111,9 +111,20 @@ public class CytoidLabShell : MonoBehaviour
 
     public static void ApplyViewportFromSettings()
     {
-        if (!IsActive || !Context.IsInitialized || Context.Player?.Settings == null) return;
+        if (!IsActive) return;
 
-        ApplyViewport(Context.Player.Settings.LabViewportPreset, Context.Player.Settings.LabViewportSize, persist: false);
+        if (Context.IsInitialized && Context.Player?.Settings != null)
+        {
+            CytoidLabPreferences.LoadInto(Context.Player.Settings);
+            ApplyViewport(Context.Player.Settings.LabViewportPreset, Context.Player.Settings.LabViewportSize,
+                persist: false);
+            return;
+        }
+
+        if (CytoidLabPreferences.TryGetViewport(out var presetId, out var sizeId))
+        {
+            ApplyViewport(presetId, sizeId, persist: false);
+        }
     }
 
     public static string NormalizeViewportPresetId(string presetId)
@@ -157,10 +168,15 @@ public class CytoidLabShell : MonoBehaviour
         var (width, height) = ResolveViewportDimensions(presetId, sizeId);
         ApplyWindowSize(width, height);
 
-        if (persist && Context.IsInitialized && Context.Player?.Settings != null)
+        if (persist)
         {
-            Context.Player.Settings.LabViewportPreset = presetId;
-            Context.Player.Settings.LabViewportSize = sizeId;
+            if (Context.IsInitialized && Context.Player?.Settings != null)
+            {
+                Context.Player.Settings.LabViewportPreset = presetId;
+                Context.Player.Settings.LabViewportSize = sizeId;
+            }
+
+            CytoidLabPreferences.SaveViewport(presetId, sizeId);
         }
     }
 
@@ -234,15 +250,24 @@ public class CytoidLabShell : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         SceneManager.sceneLoaded += OnSceneLoaded;
+        Application.quitting += PersistViewportOnQuit;
         Debug.Log($"[CytoidLab] {CytoidLabVersion.DisplayName}");
 
-        if (CurrentWindowWidth <= 0 || CurrentWindowHeight <= 0)
+        // Restore last viewport preset/size before the menu paints (defaults are 1280×720).
+        if (Context.Player?.Settings != null)
         {
-            ApplyViewportFromSettings();
-            if (CurrentWindowWidth <= 0 || CurrentWindowHeight <= 0)
-            {
-                ApplyWindowSize();
-            }
+            CytoidLabPreferences.LoadInto(Context.Player.Settings);
+        }
+
+        if (CytoidLabPreferences.TryGetViewport(out var presetId, out var sizeId))
+        {
+            CurrentViewportPresetId = presetId;
+            CurrentViewportSizeId = sizeId;
+            ApplyViewport(presetId, sizeId, persist: false);
+        }
+        else if (CurrentWindowWidth <= 0 || CurrentWindowHeight <= 0)
+        {
+            ApplyWindowSize();
         }
         else
         {
@@ -253,8 +278,15 @@ public class CytoidLabShell : MonoBehaviour
     private void OnDestroy()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
+        Application.quitting -= PersistViewportOnQuit;
         UnbindGame();
         if (Instance == this) Instance = null;
+    }
+
+    private static void PersistViewportOnQuit()
+    {
+        if (!IsActive) return;
+        CytoidLabPreferences.SaveViewport(ResolveStoredViewportPresetId(), ResolveStoredViewportSizeId());
     }
 
     private void Update()
