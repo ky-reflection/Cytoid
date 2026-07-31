@@ -225,9 +225,13 @@ public abstract partial class Note : MonoBehaviour
         return TryClear();
     }
 
-    /// <returns>True if a grade was applied and the note was cleared.</returns>
+    /// <returns>
+    /// True if this call newly cleared the note. Already-cleared notes return false
+    /// so a later finger on the same Down is not consumed.
+    /// </returns>
     public virtual bool TryClear()
     {
+        if (IsCleared) return false;
         if (IsAutoEnabled()) Clear(NoteGrade.Perfect);
         if (ShouldMiss()) Clear(NoteGrade.Miss);
         var grade = CalculateGrade();
