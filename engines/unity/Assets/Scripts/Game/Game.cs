@@ -27,6 +27,8 @@ public partial class Game : MonoBehaviour
     public GameState State { get; protected set; }
     public TierPlaySession TierPlaySession { get; private set; }
     public GameRenderer Renderer { get; protected set; }
+    public GameUiEventController UiEventController { get; protected set; }
+    public GameEventPresentationController EventPresentationController { get; protected set; }
 
     public Level Level { get; protected set; }
 
@@ -295,6 +297,8 @@ public partial class Game : MonoBehaviour
         Context.GameState = State;
 
         Config = new GameConfig(this);
+        UiEventController = new GameUiEventController(this);
+        EventPresentationController = new GameEventPresentationController(this);
 
         // Touch handlers
         if (mode != GameMode.GlobalCalibration && !State.Mods.Contains(Mod.Auto))
@@ -433,15 +437,19 @@ public partial class Game : MonoBehaviour
             {
                 // Process chart elements
                 while (Chart.CurrentEventId < Chart.Model.event_order_list.Count &&
-                       Chart.Model.event_order_list[Chart.CurrentEventId].time < Time)
+                       Chart.Model.event_order_list[Chart.CurrentEventId].time <= Time)
                 {
-                    if (Chart.Model.event_order_list[Chart.CurrentEventId].event_list[0].type == 0)
+                    var eventList = Chart.Model.event_order_list[Chart.CurrentEventId].event_list;
+                    if (eventList != null)
                     {
-                        onGameSpeedUp.Invoke(this);
-                    }
-                    else
-                    {
-                        onGameSpeedDown.Invoke(this);
+                        foreach (var chartEvent in eventList)
+                        {
+                            if (chartEvent == null) continue;
+                            if (chartEvent.type == (int) ChartEventType.SpeedUp)
+                                onGameSpeedUp.Invoke(this);
+                            else if (chartEvent.type == (int) ChartEventType.SpeedDown)
+                                onGameSpeedDown.Invoke(this);
+                        }
                     }
 
                     Chart.CurrentEventId++;
@@ -486,8 +494,11 @@ public partial class Game : MonoBehaviour
             }
         }
 
+        UiEventController?.ApplyBeforeGameUpdate(Time);
         onGameUpdate.Invoke(this);
         onGameLateUpdate.Invoke(this);
+        UiEventController?.Apply(Time);
+        EventPresentationController?.Apply(Time);
     }
 
     protected virtual void OnApplicationPause(bool willPause)
