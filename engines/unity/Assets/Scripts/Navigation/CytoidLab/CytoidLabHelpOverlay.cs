@@ -296,7 +296,7 @@ public class CytoidLabHelpOverlay : MonoBehaviour
 
     private static string GetTipsText()
     {
-        return "Import — pick a .cytoidlevel or .zip file, or drag one onto CytoidLab.exe.\n"
+        return "Import — pick one or more .cytoidlevel / .zip files, or drag packages onto CytoidLab.exe.\n"
                + "Levels are stored under Unity persistent data (see Player.log folder).\n"
                + $"Version: {CytoidLabVersion.DisplayName}";
     }

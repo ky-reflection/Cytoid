@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -22,7 +23,7 @@ public class CytoidLabMenuController : MonoBehaviour
     public const int ButtonFontSize = 20;
     public const float LevelRowHeight = 80f;
 
-    private const string DefaultSelectionHint = "Select a level or import a .cytoidlevel / .zip";
+    private const string DefaultSelectionHint = "Select a level or import .cytoidlevel / .zip files";
 
     private static readonly Difficulty[] DifficultyOptions = { Difficulty.Easy, Difficulty.Hard, Difficulty.Extreme };
     private static bool initialViewportApplied;
@@ -169,7 +170,7 @@ public class CytoidLabMenuController : MonoBehaviour
             HintFontSize, TextAnchor.MiddleCenter);
         selectionHintText.GetComponent<LayoutElement>().preferredHeight = 22;
 
-        var importButton = CreateButton(root, "Import level", () => ImportLevelFile().Forget());
+        var importButton = CreateButton(root, "Import levels", () => ImportLevelFiles().Forget());
         importButton.GetComponent<LayoutElement>().preferredHeight = ButtonHeight;
 
         statusText = CreateText(root, "", StatusFontSize, TextAnchor.MiddleLeft);
@@ -520,7 +521,7 @@ public class CytoidLabMenuController : MonoBehaviour
         if (selectedLevel == null)
         {
             selectionHintText.text = selectedDifficulty != null
-                ? $"Select a level ({selectedDifficulty.Id}) or import a .cytoidlevel / .zip"
+                ? $"Select a level ({selectedDifficulty.Id}) or import .cytoidlevel / .zip files"
                 : DefaultSelectionHint;
             return;
         }
@@ -654,7 +655,7 @@ public class CytoidLabMenuController : MonoBehaviour
 
             if (Context.LevelManager.LoadedLocalLevels.Count == 0)
             {
-                var empty = CreateButton(levelListRoot, "No levels installed. Use Import to add a level.", () => { });
+                var empty = CreateButton(levelListRoot, "No levels installed. Use Import to add levels.", () => { });
                 empty.interactable = false;
                 empty.GetComponent<LayoutElement>().preferredHeight = LevelButtonHeight;
                 SetStatus("No levels installed.");
@@ -820,28 +821,38 @@ public class CytoidLabMenuController : MonoBehaviour
         GameLaunchBridge.StartDebugGame(selectedLevel, selectedDifficulty, new List<Mod> { Mod.Auto });
     }
 
-    private async UniTask ImportLevelFile()
+    private async UniTask ImportLevelFiles()
     {
-        var path = await PickCytoidLevelFile();
-        if (string.IsNullOrEmpty(path))
+        var paths = await PickCytoidLevelFiles();
+        if (paths == null || paths.Count == 0)
         {
             SetStatus(CytoidLabLevelImport.LastPickerMessage ?? "No file selected.");
             return;
         }
 
-        await InstallLevelPackage(path);
+        await InstallLevelPackages(paths);
     }
 
-    private async UniTask InstallLevelPackage(string path)
+    private async UniTask InstallLevelPackages(List<string> paths)
     {
-        SetStatus($"Installing {Path.GetFileName(path)}...");
+        paths = paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (paths.Count == 0) return;
+
+        SetStatus(paths.Count == 1
+            ? $"Installing {Path.GetFileName(paths[0])}..."
+            : $"Installing {paths.Count} levels...");
         try
         {
-            // Keep the source file; the user picked it from their own storage.
-            var installed = await Context.LevelManager.InstallLevels(new List<string> { path }, LevelType.User, deleteSource: false);
+            // Keep the source files; the user picked them from their own storage.
+            var installed = await Context.LevelManager.InstallLevels(paths, LevelType.User, deleteSource: false);
             if (installed == null || installed.Count == 0)
             {
-                SetStatus($"Import failed for {Path.GetFileName(path)}. See Player.log.");
+                SetStatus(paths.Count == 1
+                    ? $"Import failed for {Path.GetFileName(paths[0])}. See Player.log."
+                    : $"Import failed for all {paths.Count} selected levels. See Player.log.");
                 return;
             }
             // Remember the newly imported level so the list can select it after refresh.
@@ -849,7 +860,18 @@ public class CytoidLabMenuController : MonoBehaviour
             // Ensure the newly installed level is loaded into LoadedLocalLevels.
             await Context.LevelManager.LoadLevelsOfType(LevelType.User);
             await RefreshLevelList();
-            SetStatus($"Installed {Path.GetFileName(path)}.");
+            if (paths.Count == 1)
+            {
+                SetStatus($"Installed {Path.GetFileName(paths[0])}.");
+            }
+            else if (installed.Count == paths.Count)
+            {
+                SetStatus($"Installed {installed.Count} levels.");
+            }
+            else
+            {
+                SetStatus($"Installed {installed.Count}/{paths.Count} selected levels. See Player.log for failures.");
+            }
         }
         catch (Exception e)
         {
@@ -873,13 +895,13 @@ public class CytoidLabMenuController : MonoBehaviour
         }
     }
 
-    private async UniTask<string> PickCytoidLevelFile()
+    private async UniTask<List<string>> PickCytoidLevelFiles()
     {
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
         await UniTask.SwitchToMainThread();
         try
         {
-            return CytoidLabLevelImport.PickLevelPackageWindows();
+            return CytoidLabLevelImport.PickLevelPackagesWindows();
         }
         catch (Exception e)
         {
@@ -888,20 +910,18 @@ public class CytoidLabMenuController : MonoBehaviour
         }
 #else
         await UniTask.CompletedTask;
-        return null;
+        return new List<string>();
 #endif
     }
 
     private void ProcessCommandLineImport()
     {
-        var args = Environment.GetCommandLineArgs();
-        foreach (var arg in args)
-        {
-            if (!CytoidLabLevelImport.IsLevelPackagePath(arg)) continue;
-            if (!File.Exists(arg)) continue;
-            InstallLevelPackage(arg).Forget();
-            break;
-        }
+        var paths = Environment.GetCommandLineArgs()
+            .Where(CytoidLabLevelImport.IsLevelPackagePath)
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (paths.Count > 0) InstallLevelPackages(paths).Forget();
     }
 }
 
@@ -924,8 +944,8 @@ internal static class CytoidLabLevelImport
     private const int OfnFileMustExist = 0x00001000;
     private const int OfnPathMustExist = 0x00000800;
     private const int OfnNoChangeDir = 0x00000008;
-    private const int FileBufferChars = 8192;
-    private const int FileTitleBufferChars = 256;
+    private const int OfnAllowMultiSelect = 0x00000200;
+    private const int FileBufferChars = 65536;
 
     [DllImport("comdlg32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool GetOpenFileName([In, Out] OpenFileName ofn);
@@ -943,9 +963,9 @@ internal static class CytoidLabLevelImport
         public string lpstrCustomFilter;
         public int nMaxCustFilter;
         public int nFilterIndex;
-        public string lpstrFile;
+        public IntPtr lpstrFile;
         public int nMaxFile;
-        public string lpstrFileTitle;
+        public IntPtr lpstrFileTitle = IntPtr.Zero;
         public int nMaxFileTitle;
         public string lpstrInitialDir;
         public string lpstrTitle;
@@ -961,57 +981,90 @@ internal static class CytoidLabLevelImport
         public int FlagsEx;
     }
 
-    public static string PickLevelPackageWindows()
+    public static List<string> PickLevelPackagesWindows()
     {
         LastPickerMessage = null;
+        var fileBuffer = Marshal.AllocHGlobal(FileBufferChars * sizeof(char));
 
-        var ofn = new OpenFileName
+        try
         {
-            lStructSize = Marshal.SizeOf(typeof(OpenFileName)),
-            lpstrFilter = "Cytoid level\0*.cytoidlevel;*.zip\0ZIP archive\0*.zip\0All files\0*.*\0\0",
-            nFilterIndex = 1,
-            lpstrFile = new string('\0', FileBufferChars),
-            nMaxFile = FileBufferChars,
-            lpstrFileTitle = new string('\0', FileTitleBufferChars),
-            nMaxFileTitle = FileTitleBufferChars,
-            lpstrTitle = "Select a Cytoid level",
-            Flags = OfnExplorer | OfnFileMustExist | OfnPathMustExist | OfnNoChangeDir
-        };
-
-        if (!GetOpenFileName(ofn))
-        {
-            var dialogError = CommDlgExtendedError();
-            if (dialogError != 0)
+            Marshal.WriteInt16(fileBuffer, 0, 0);
+            var ofn = new OpenFileName
             {
-                LastPickerMessage = $"File picker failed (error {dialogError}). See Player.log.";
-                Debug.LogError($"[CytoidLab] GetOpenFileName failed: CommDlgExtendedError={dialogError}, Win32={Marshal.GetLastWin32Error()}");
+                lStructSize = Marshal.SizeOf(typeof(OpenFileName)),
+                lpstrFilter = "Cytoid level\0*.cytoidlevel;*.zip\0ZIP archive\0*.zip\0All files\0*.*\0\0",
+                nFilterIndex = 1,
+                lpstrFile = fileBuffer,
+                nMaxFile = FileBufferChars,
+                nMaxFileTitle = 0,
+                lpstrTitle = "Select Cytoid levels",
+                Flags = OfnExplorer | OfnFileMustExist | OfnPathMustExist | OfnNoChangeDir | OfnAllowMultiSelect
+            };
+
+            if (!GetOpenFileName(ofn))
+            {
+                var dialogError = CommDlgExtendedError();
+                if (dialogError != 0)
+                {
+                    LastPickerMessage = $"File picker failed (error {dialogError}). See Player.log.";
+                    Debug.LogError($"[CytoidLab] GetOpenFileName failed: CommDlgExtendedError={dialogError}, Win32={Marshal.GetLastWin32Error()}");
+                }
+
+                return null;
             }
 
-            return null;
-        }
+            var values = ReadNullSeparatedStrings(fileBuffer, FileBufferChars);
+            if (values.Count == 0)
+            {
+                LastPickerMessage = "File picker returned no paths.";
+                return null;
+            }
 
-        var path = ofn.lpstrFile;
-        if (string.IsNullOrWhiteSpace(path))
+            var paths = values.Count == 1
+                ? new List<string> { values[0] }
+                : values.Skip(1).Select(fileName => Path.Combine(values[0], fileName)).ToList();
+            paths = paths
+                .Select(Path.GetFullPath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var invalidPaths = paths
+                .Where(path => !File.Exists(path) || !IsLevelPackagePath(path))
+                .ToList();
+            if (invalidPaths.Count > 0)
+            {
+                LastPickerMessage = "Select only existing .cytoidlevel or .zip files.";
+                Debug.LogError($"[CytoidLab] Invalid selected paths: {string.Join(", ", invalidPaths)}");
+                return null;
+            }
+
+            return paths;
+        }
+        finally
         {
-            LastPickerMessage = "File picker returned an empty path.";
-            return null;
+            Marshal.FreeHGlobal(fileBuffer);
         }
+    }
 
-        path = path.Split('\0')[0].Trim();
-        if (path.Length == 0 || !File.Exists(path))
+    private static List<string> ReadNullSeparatedStrings(IntPtr buffer, int maxChars)
+    {
+        var values = new List<string>();
+        var value = new StringBuilder();
+        for (var index = 0; index < maxChars; index++)
         {
-            LastPickerMessage = "Selected file was not found.";
-            Debug.LogError($"[CytoidLab] Picked path missing on disk: {path}");
-            return null;
+            var character = (char) Marshal.ReadInt16(buffer, index * sizeof(char));
+            if (character != '\0')
+            {
+                value.Append(character);
+                continue;
+            }
+
+            if (value.Length == 0) break;
+            values.Add(value.ToString());
+            value.Clear();
         }
 
-        if (!IsLevelPackagePath(path))
-        {
-            LastPickerMessage = "Select a .cytoidlevel or .zip file.";
-            return null;
-        }
-
-        return path;
+        return values;
     }
 #endif
 }
