@@ -3,11 +3,25 @@ using UnityEngine;
 // Drop note renderer for DropDrag. Inherits ClassicNoteRenderer directly (DropDrag does not
 // extend ClickNote, and DropDrag has no Core layer). Behaves like DropClickNoteRenderer minus
 // the Core handling: drop notes ignore approach scale/fill animations and reach the scanline
-// via the Y offset alone.
+// via the Y offset alone, applied only to visual children so the CircleCollider2D stays
+// anchored at the landing scanline point.
 public class DropDragNoteRenderer : ClassicNoteRenderer
 {
+    // Base localPosition of each visual child, snapshotted ONCE in the constructor when the
+    // Note GameObject is freshly created from its prefab. Pool-reuse safe — see DropClickNoteRenderer.
+    private Vector3 ringBaseLocal;
+    private Vector3 fillBaseLocal;
+    private Vector3 noteIdBaseLocal;
+    private bool hasNoteId;
+
     public DropDragNoteRenderer(Note note) : base(note)
     {
+        // Snapshot base localPosition once. base() has already instantiated Ring, Fill, and
+        // (when DisplayNoteId) NoteId, so all visual children are available here.
+        ringBaseLocal = Ring.transform.localPosition;
+        fillBaseLocal = Fill.transform.localPosition;
+        hasNoteId = DisplayNoteId && NoteId != null;
+        if (hasNoteId) noteIdBaseLocal = NoteId.transform.localPosition;
     }
 
     public override void OnNoteLoaded()
@@ -18,30 +32,30 @@ public class DropDragNoteRenderer : ClassicNoteRenderer
         Fill.sortingOrder = Ring.sortingOrder + 1;
     }
 
+    public override void OnCollect()
+    {
+        base.OnCollect();
+        // Restore prefab-local positions so a Note GameObject pulled from the pool starts the
+        // next cycle from a clean visual state.
+        Ring.transform.localPosition = ringBaseLocal;
+        Fill.transform.localPosition = fillBaseLocal;
+        if (hasNoteId) NoteId.transform.localPosition = noteIdBaseLocal;
+    }
+
     protected override void Render()
     {
         base.Render();
         ApplyDropOffset();
     }
 
+    // Drives the falling animation by offsetting only the visual children — see
+    // DropNoteOffset.ComputeLocalOffset for the math and rationale.
     private void ApplyDropOffset()
     {
-        var page = Note.Page;
-        double durationTick = (page.end_tick - page.start_tick) * 5.0;
-        if (durationTick <= 0 || !double.IsFinite(durationTick)) return;
-
-        // Cylheim uses screen coords (Y down): Up=+1, Down=-1.
-        // Unity uses world coords (Y up): flip the sign so Down falls from above (+Y), Up rises from below (-Y).
-        float dirSign = Note.Model.NoteDirection == 1 ? -1f : 1f;
-        float timeDiffSeconds = (float) (Note.Model.start_time - Note.Game.Time);
-        if (timeDiffSeconds <= 0f) return;
-
-        float screenHeightWorld = 2f * Note.Game.camera.orthographicSize;
-        float offsetYWorld = dirSign * (8_000_000f / (float) durationTick) * timeDiffSeconds / 1080f *
-                             screenHeightWorld;
-        var pos = Note.transform.localPosition;
-        pos.y += offsetYWorld;
-        Note.transform.localPosition = pos;
+        Vector3 localOffset = DropNoteOffset.ComputeLocalOffset(Note);
+        DropNoteOffset.ApplyToChild(Ring.transform, ringBaseLocal, localOffset);
+        DropNoteOffset.ApplyToChild(Fill.transform, fillBaseLocal, localOffset);
+        if (hasNoteId) DropNoteOffset.ApplyToChild(NoteId.transform, noteIdBaseLocal, localOffset);
     }
 
     protected override void UpdateTransformScale()
