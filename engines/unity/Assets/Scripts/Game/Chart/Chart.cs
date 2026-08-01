@@ -119,6 +119,8 @@ public class Chart
             }
 
             if (isVerticallyInverted) page.scan_line_direction = page.scan_line_direction == 1 ? -1 : 1;
+            PositionFunction.BakeArgs(page);
+            if (isVerticallyInverted) page.position_arg_b *= -1f;
         }
 
         var pageNoteCountsByType = new Dictionary<NoteType, int[]>();
@@ -148,6 +150,8 @@ public class Chart
             if (isHoldType) pageHoldTypeNoteCounts[note.page_index]++;
             
             note.direction = page.scan_line_direction;
+            if (isVerticallyInverted && (type == NoteType.DropClick || type == NoteType.DropDrag))
+                note.NoteDirection = note.NoteDirection == 1 ? 0 : 1;
             var speed = note.page_index == 0 ? 1.0f : CalculateNoteSpeed(note);
 
             var modSpeed = 1f;
@@ -162,11 +166,13 @@ public class Chart
                 case NoteType.LongHold:
                 case NoteType.Flick:
                 case NoteType.CDragHead:
+                case NoteType.DropClick:
                     note.initial_scale = useExperimentalNoteAr ? 0.1f : 0.4f;
                     break;
                 case NoteType.DragHead:
                 case NoteType.DragChild:
                 case NoteType.CDragChild:
+                case NoteType.DropDrag:
                     note.initial_scale = useExperimentalNoteAr ? 0.4f : 0.7f;
                     break;
                 default:
@@ -192,14 +198,16 @@ public class Chart
                 ConvertChartTickToScreenY((float) (note.tick + note.hold_tick))
             );
 
-            note.holdlength = (float) (verticalRatio * 2.0f * baseSize *
-                                       note.hold_tick /
-                                       (page.end_tick -
-                                        page.start_tick));
+            note.holdlength = GetHoldScreenLength(page, (float) note.tick, (float) (note.tick + note.hold_tick));
 
             if (note.type == (int) NoteType.DragHead || note.type == (int) NoteType.DragChild || 
                 note.type == (int) NoteType.CDragHead || note.type == (int) NoteType.CDragChild)
                 note.intro_time = note.start_time - 1.175f / speed;
+            else if (note.type == (int) NoteType.DropClick || note.type == (int) NoteType.DropDrag)
+            {
+                var dropStartTick = (float) (note.tick - (page.end_tick - page.start_tick) * 5.0);
+                note.intro_time = ConvertToTime(dropStartTick);
+            }
             else
                 note.intro_time = note.start_time - 1.367f / speed;
         }
@@ -223,6 +231,10 @@ public class Chart
                     note.tint = note.direction == 1 ? 0.94f : 1.06f;
                     break;
                 case NoteType.LongHold:
+                    note.tint = note.direction == 1 ? 0.94f : 1.06f;
+                    break;
+                case NoteType.DropClick:
+                case NoteType.DropDrag:
                     note.tint = note.direction == 1 ? 0.94f : 1.06f;
                     break;
                 case NoteType.DragHead:
@@ -324,18 +336,79 @@ public class Chart
                + verticalOffset;
     }
 
+    float PageDisplayYToScreenY(float yDisplay)
+    {
+        return verticalRatio * (yDisplay * baseSize) + verticalOffset;
+    }
+
+    static float GetPageProgressByTick(ChartModel.Page page, float tick)
+    {
+        var span = (float) (page.end_tick - page.start_tick);
+        if (span <= 0f) return 0f;
+        return (tick - (float) page.start_tick) / span;
+    }
+
+    static float GetPageProgressByTime(ChartModel.Page page, float time)
+    {
+        var span = page.end_time - page.start_time;
+        if (span <= 0f) return 0f;
+        return (time - page.start_time) / span;
+    }
+
+    public int FindPageIndexByTime(float time)
+    {
+        for (var i = 0; i < Model.page_list.Count; i++)
+        {
+            if (time < Model.page_list[i].end_time) return i;
+        }
+
+        return Model.page_list.Count;
+    }
+
+    public int FindPageIndexByTick(float tick)
+    {
+        for (var i = 0; i < Model.page_list.Count; i++)
+        {
+            if (tick <= Model.page_list[i].end_tick) return i;
+        }
+
+        return Model.page_list.Count;
+    }
+
+    float GetNoteScreenYAtTick(ChartModel.Page page, float tick)
+    {
+        var t = GetPageProgressByTick(page, tick);
+        return PageDisplayYToScreenY(PositionFunction.EvaluateDisplayY(page, t));
+    }
+
+    /// <summary>
+    /// Legacy past-last-page extrapolation: continue from the end edge with flipped scan direction.
+    /// </summary>
+    float GetScreenYPastPageEnd(ChartModel.Page page, float chronologicalProgressPastStart)
+    {
+        var past = chronologicalProgressPastStart - 1f;
+        return PageDisplayYToScreenY(
+            PositionFunction.EvaluateDisplayY(page, past, -page.scan_line_direction));
+    }
+
+    float GetHoldScreenLength(ChartModel.Page page, float startTick, float endTick)
+    {
+        var t0 = GetPageProgressByTick(page, startTick);
+        var t1 = GetPageProgressByTick(page, endTick);
+        var y0 = PositionFunction.EvaluateDisplayY(page, t0);
+        var y1 = PositionFunction.EvaluateDisplayY(page, t1);
+        return verticalRatio * baseSize * Mathf.Abs(y1 - y0);
+    }
+
     public float GetNoteScreenY(ChartModel.Note note)
     {
-        var page = Model.page_list[note.page_index];
-        return (float) (
-            verticalRatio * page.scan_line_direction *
-            (-baseSize + 2.0f *
-                baseSize *
-                (note.tick - page.start_tick) * 1.0f /
-                (page.end_tick - page.start_tick))
-            + verticalOffset);
+        return GetNoteScreenYAtTick(Model.page_list[note.page_index], (float) note.tick);
     }
-    
+
+    /// <summary>
+    /// Legacy chart Y for Storyboard overrides (<see cref="ChartModel.Note.CalculatePosition"/>).
+    /// Intentionally linear in tick progress; not PageFunction-aware.
+    /// </summary>
     public float GetNoteChartY(ChartModel.Note note)
     {
         var page = Model.page_list[note.page_index];
@@ -345,67 +418,31 @@ public class Chart
 
     public float ConvertChartTickToScreenY(float tick)
     {
-        var targetPageId = 0;
-        while (targetPageId < Model.page_list.Count && tick > Model.page_list[targetPageId].end_tick)
-            targetPageId++;
+        var pageId = FindPageIndexByTick(tick);
+        if (pageId == Model.page_list.Count)
+            return GetScreenYPastPageEnd(Model.page_list[pageId - 1], GetPageProgressByTick(Model.page_list[pageId - 1], tick));
 
-        if (targetPageId == Model.page_list.Count)
-            return (float) (
-                -verticalRatio * Model.page_list[targetPageId - 1].scan_line_direction *
-                (-baseSize + 2.0f *
-                 baseSize *
-                 (tick - Model.page_list[targetPageId - 1].end_tick) *
-                 1.0f / (Model.page_list[targetPageId - 1].end_tick -
-                         Model.page_list[targetPageId - 1].start_tick))
-                + verticalOffset);
-
-        return (float) (
-            verticalRatio * Model.page_list[targetPageId].scan_line_direction *
-            (-baseSize + 2.0f *
-             baseSize * (tick - Model.page_list[targetPageId].start_tick) *
-             1.0f / (Model.page_list[targetPageId].end_tick - Model.page_list[targetPageId].start_tick))
-            + verticalOffset);
+        return GetNoteScreenYAtTick(Model.page_list[pageId], tick);
     }
 
     public float GetScannerPositionY(float time, bool useScannerSmoothing)
     {
         // Lab SeekTo already syncs CurrentPageId; keep this query free of page-cursor side effects.
-        var pageId = 0;
-        while (pageId < Model.page_list.Count && time > Model.page_list[pageId].end_time)
-            pageId++;
+        var pageId = FindPageIndexByTime(time);
         if (pageId == Model.page_list.Count)
         {
-            if (useScannerSmoothing)
-                return (float) (-verticalRatio * Model.page_list[pageId - 1].scan_line_direction *
-                                (-baseSize + 2.0f *
-                                 baseSize *
-                                 (ConvertToTick(time) - Model.page_list[pageId - 1].end_tick) *
-                                 1.0f / (Model.page_list[pageId - 1].end_tick -
-                                         Model.page_list[pageId - 1].start_tick))
-                                + verticalOffset);
-            return -verticalRatio * Model.page_list[pageId - 1].scan_line_direction *
-                   (-baseSize + 2.0f *
-                    baseSize *
-                    (time - Model.page_list[pageId - 1].end_time) *
-                    1.0f / (Model.page_list[pageId - 1].end_time -
-                            Model.page_list[pageId - 1].start_time))
-                   + verticalOffset;
+            var page = Model.page_list[pageId - 1];
+            var progress = useScannerSmoothing
+                ? GetPageProgressByTick(page, ConvertToTick(time))
+                : GetPageProgressByTime(page, time);
+            return GetScreenYPastPageEnd(page, progress);
         }
 
-        if (useScannerSmoothing)
-            return (float) (verticalRatio * Model.page_list[pageId].scan_line_direction *
-                            (-baseSize + 2.0f *
-                             baseSize *
-                             (ConvertToTick(time) - Model.page_list[pageId].start_tick) *
-                             1.0f / (Model.page_list[pageId].end_tick -
-                                     Model.page_list[pageId].start_tick))
-                            + verticalOffset);
-        return verticalRatio * Model.page_list[pageId].scan_line_direction *
-               (-baseSize + 2.0f *
-                baseSize *
-                (time - Model.page_list[pageId].start_time) *
-                1.0f / (Model.page_list[pageId].end_time - Model.page_list[pageId].start_time))
-               + verticalOffset;
+        var current = Model.page_list[pageId];
+        var pageProgress = useScannerSmoothing
+            ? GetPageProgressByTick(current, ConvertToTick(time))
+            : GetPageProgressByTime(current, time);
+        return PageDisplayYToScreenY(PositionFunction.EvaluateDisplayY(current, pageProgress));
     }
 
     public float GetScanlinePosition01(float percentage)
@@ -413,6 +450,18 @@ public class Chart
         return ConvertChartYToScreenY(percentage);
     }
 
+    public float GetPageBoundaryScreenY(int pageId, bool bottom)
+    {
+        pageId = Mathf.Clamp(pageId, 0, Model.page_list.Count - 1);
+        var page = Model.page_list[pageId];
+        PositionFunction.GetVisibleBand(page, out var low, out var high);
+        return PageDisplayYToScreenY(bottom ? low : high);
+    }
+
+    /// <summary>
+    /// Full play-area top/bottom (always ±baseSize). Page-aware bands use
+    /// <see cref="GetPageBoundaryScreenY"/> instead.
+    /// </summary>
     public float GetBoundaryPosition(bool bottom)
     {
         return verticalRatio * (bottom ? 1 : -1) *

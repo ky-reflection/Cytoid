@@ -44,6 +44,10 @@ Bridge / mobile builds are unaffected (`GameEmbedMode.IsBridgeEmbedded` gates La
 
 ## Features
 
+**Current branch (unreleased)**
+- C2V3 page `PositionFunction` support for gameplay note, hold, scanner, and page-boundary coordinates
+- Legacy charts retain their existing linear page mapping; storyboard Y overrides remain on the legacy coordinate path
+
 **v0.1.2**
 - Viewport presets (16:9 / 4:3, Small / Large); applies on Start
 - Skip end on chart clear (`End: On/Off`)

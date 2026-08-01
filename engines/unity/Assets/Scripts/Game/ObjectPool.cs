@@ -16,7 +16,9 @@ public class ObjectPool
         {NoteType.DragHead, 12},
         {NoteType.DragChild, 48},
         {NoteType.CDragHead, 12},
-        {NoteType.CDragChild, 48}
+        {NoteType.CDragChild, 48},
+        {NoteType.DropClick, 24},
+        {NoteType.DropDrag, 24}
     };
     private int initialDragLineObjectCount = 48;
 
@@ -252,6 +254,12 @@ public class ObjectPool
                 case NoteType.CDragChild:
                     note = Object.Instantiate(provider.dragChildNotePrefab, game.contentParent.transform).GetComponent<Note>();
                     break;
+                case NoteType.DropClick:
+                    note = Object.Instantiate(provider.dropClickNotePrefab, game.contentParent.transform).GetComponent<DropClickNote>();
+                    break;
+                case NoteType.DropDrag:
+                    note = Object.Instantiate(provider.dropDragNotePrefab, game.contentParent.transform).GetComponent<DropDragNote>();
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -362,4 +370,3 @@ public class ObjectPool
     }
 
 }
-
