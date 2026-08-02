@@ -9,13 +9,12 @@ public class DropDragNote : Note
         return new DropDragNoteRenderer(this);
     }
 
-    public override void OnTouch(Vector2 screenPos)
+    public override bool OnTouch(Vector2 screenPos)
     {
-        // Current Lab Note.OnTouch returns void; this is the only signature adaptation from the branch.
-        if (Model.start_time - Game.Time > 0.31f) return;
+        if (Model.start_time - Game.Time > 0.31f) return false;
         if (Model.page_index > Game.Chart.CurrentPageId &&
-            Model.start_time - Game.Time > Page.Duration / 2f) return;
-        base.OnTouch(screenPos);
+            Model.start_time - Game.Time > Page.Duration / 2f) return false;
+        return base.OnTouch(screenPos);
     }
 
     public override NoteGrade CalculateGrade()

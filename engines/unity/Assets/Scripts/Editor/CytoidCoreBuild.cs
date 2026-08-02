@@ -396,7 +396,7 @@ public static class CytoidCoreBuild
             EditorApplication.update -= ContinuePendingBuild;
             Debug.LogError(
                 $"[CytoidCoreBuild] Timed out after {ScriptCompilationTimeoutSeconds}s "
-                + $"waiting for script compilation ({platform} plugin export).");
+                + $"waiting for script compilation ({platform} build).");
             if (Application.isBatchMode) EditorApplication.Exit(1);
             return;
         }
@@ -414,7 +414,7 @@ public static class CytoidCoreBuild
         ClearPendingBuildState();
         EditorApplication.update -= ContinuePendingBuild;
 
-        Debug.Log($"[CytoidCoreBuild] Script compilation finished ({platform} plugin export).");
+        Debug.Log($"[CytoidCoreBuild] Script compilation finished ({platform} build).");
 
         try
         {
@@ -435,7 +435,7 @@ public static class CytoidCoreBuild
                         PackageAndroidLibraryForFlutter();
                     });
             }
-            else
+            else if (platform == "ios")
             {
                 RunIOSExport(
                     PluginBuildScenes,
@@ -463,10 +463,20 @@ public static class CytoidCoreBuild
                         }
                     });
             }
+            else if (platform == "windows-lab")
+            {
+                RunStandaloneWindows64Build(
+                    PlayerBuildScenes,
+                    Path.Combine(outputDir, "CytoidLab.exe"));
+            }
+            else
+            {
+                throw new InvalidOperationException($"Unknown pending build platform '{platform}'.");
+            }
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[CytoidCoreBuild] Export failed: {ex}");
+            Debug.LogError($"[CytoidCoreBuild] Build failed: {ex}");
             if (Application.isBatchMode) EditorApplication.Exit(1);
             return;
         }
@@ -689,7 +699,8 @@ public static class CytoidCoreBuild
     }
 
     /// <summary>
-    /// Batchmode: Unity -batchmode -quit -projectPath ... -executeMethod CytoidCoreBuild.BuildCytoidLabWindows64
+    /// Batchmode: Unity -batchmode -projectPath ... -executeMethod CytoidCoreBuild.BuildCytoidLabWindows64
+    /// (do NOT pass -quit; this method exits batchmode explicitly after async compilation/build.)
     /// </summary>
     public static void BuildCytoidLabWindows64()
     {
@@ -699,13 +710,25 @@ public static class CytoidCoreBuild
 
     public static void BuildCytoidLabWindows64(string outputDirectory)
     {
-        SwitchToStandaloneWindows64();
-        Directory.CreateDirectory(outputDirectory);
-        var executablePath = Path.Combine(outputDirectory, "CytoidLab.exe");
+        if (EditorPrefs.GetBool(PendingBuildActiveKey, false))
+        {
+            throw new InvalidOperationException(
+                "A CytoidCoreBuild operation is already in progress. Wait for it to finish "
+                + $"or clear EditorPrefs key '{PendingBuildActiveKey}' manually if stuck.");
+        }
 
-        RunAfterScriptCompilation(
-            () => RunStandaloneWindows64Build(PlayerBuildScenes, executablePath),
-            "Cytoid Lab Windows x64 build");
+        SetPendingBuildState("windows-lab", outputDirectory, packageFramework: false, iosSdk: "");
+        try
+        {
+            SwitchToStandaloneWindows64();
+            Directory.CreateDirectory(outputDirectory);
+            EditorApplication.update += ContinuePendingBuild;
+        }
+        catch
+        {
+            ClearPendingBuildState();
+            throw;
+        }
     }
 
     private static void SwitchToStandaloneWindows64()

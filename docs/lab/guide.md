@@ -80,9 +80,12 @@ Bridge / mobile builds are unaffected (`GameEmbedMode.IsBridgeEmbedded` gates La
 **Batchmode:**
 
 ```bash
-Unity -batchmode -quit -projectPath engines/unity \
+Unity -batchmode -projectPath engines/unity \
   -executeMethod CytoidCoreBuild.BuildCytoidLabWindows64
 ```
+
+Do not pass `-quit`: the build waits for any target-switch script compilation through
+`EditorApplication.update` and exits batchmode explicitly when finished.
 
 **Output:** `engines/unity/Builds/CytoidLab/CytoidLab.exe`
 

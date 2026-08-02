@@ -43,8 +43,7 @@ public partial class Game
         RefreshSpawnedHoldProgress(targetTime);
         RefreshSpawnedDragVisualState(targetTime, visualPreviewOnly: true);
 
-        onGameUpdate.Invoke(this);
-        onGameLateUpdate.Invoke(this);
+        ApplySeekSynchronizedGameUpdate();
     }
 
     public void Seek(float targetTime)
@@ -113,14 +112,27 @@ public partial class Game
                 onGameUnpaused.Invoke(this);
             }
 
-            onGameUpdate.Invoke(this);
-            onGameLateUpdate.Invoke(this);
+            ApplySeekSynchronizedGameUpdate();
         }
         finally
         {
             SuppressTimelineGameplayMutations = false;
             ClearSpawnedHoldTimelineVisualState();
         }
+    }
+
+    /// <summary>
+    /// Replays the same presentation order as <see cref="Game.Update"/> after a Lab timeline jump.
+    /// The C2 UI and message timelines are evaluated from absolute chart time, so this keeps
+    /// backward/forward seeks deterministic without replaying intermediate chart events.
+    /// </summary>
+    private void ApplySeekSynchronizedGameUpdate()
+    {
+        UiEventController?.ApplyBeforeGameUpdate(Time);
+        onGameUpdate.Invoke(this);
+        onGameLateUpdate.Invoke(this);
+        UiEventController?.Apply(Time);
+        EventPresentationController?.Apply(Time);
     }
 
     private void ResetChartIndicesToTime(float targetTime)

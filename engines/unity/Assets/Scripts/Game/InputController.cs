@@ -28,7 +28,7 @@ public class InputController : MonoBehaviour
 
     public readonly Dictionary<int, FlickNote> FlickingNotes = new Dictionary<int, FlickNote>(); // Finger index to note
     public readonly Dictionary<int, HoldNote> HoldingNotes = new Dictionary<int, HoldNote>(); // Finger index to note
-    public readonly List<Note> TouchableDragNotes = new List<Note>(); // Drag head, Drag child, CDrag child
+    public readonly List<Note> TouchableDragNotes = new List<Note>(); // Drag head, Drag child, CDrag child, DropDrag
     public readonly List<HoldNote> TouchableHoldNotes = new List<HoldNote>(); // Hold, Long hold (FingerUpdate)
     /// <summary>
     /// Click / CDrag head / Flick / unheld Hold in SpawnedNotes id order.
@@ -86,7 +86,9 @@ public class InputController : MonoBehaviour
         FlickingNotes.Clear();
         TouchableDragNotes.Clear();
         TouchableHoldNotes.Clear();
-        TouchableNormalNotes.Clear();
+        TouchableSelectNotes.Clear();
+        hitCandidates.Clear();
+        clusterScratch.Clear();
     }
 
     public void OnGameUpdate(Game game)
@@ -104,10 +106,6 @@ public class InputController : MonoBehaviour
             {
                 TouchableDragNotes.Add(note);
                 continue;
-            }
-            else if (note.Type != NoteType.Hold && note.Type != NoteType.LongHold)
-            {
-                TouchableNormalNotes.Add(note);
             }
 
             if (note.Type == NoteType.Hold || note.Type == NoteType.LongHold)

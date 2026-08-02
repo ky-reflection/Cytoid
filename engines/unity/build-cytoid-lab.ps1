@@ -102,7 +102,6 @@ try {
         Write-Info "Starting Windows x64 IL2CPP build..."
         $unityArgs = @(
             "-batchmode",
-            "-quit",
             "-projectPath", $ProjectPath,
             "-executeMethod", $method,
             "-logFile", $logFile
