@@ -42,6 +42,7 @@ Deprecated v1 protocol: `engines/unity/flutter_plugin/example/docs/host-protocol
 
 | Document | Purpose |
 |----------|---------|
+| [flick-unified-cluster-design.md](flick-unified-cluster-design.md) | Design for shared 15 ms Click/Flick clusters, rendered-X arbitration, multi-finger reservation, and Flick lifecycle hardening |
 | [storyboard-runtime-contract.md](storyboard-runtime-contract.md) | Supply-side SB contract for cytoid-sb (emit profile, macros, gaps) |
 | [vendor.md](vendor.md) | Optional licensed vendor packages |
 
