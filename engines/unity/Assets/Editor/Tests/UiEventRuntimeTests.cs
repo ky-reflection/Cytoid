@@ -134,6 +134,55 @@ public class UiEventRuntimeTests
     }
 
     [Test]
+    public void OverlayResizePreservesResolvedLayoutHolderSizes()
+    {
+        var scene = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Additive);
+        try
+        {
+            var game = scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Game>(true))
+                .Single();
+            var overlay = scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<OverlayScreen>(true))
+                .Single();
+
+            var cacheChildren = typeof(OverlayScreen).GetMethod(
+                "CacheChildren",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(cacheChildren, Is.Not.Null);
+            cacheChildren.Invoke(overlay, null);
+
+            var levelInfoHolder = (RectTransform) game.levelInfoParent.transform;
+            var modsHolder = (RectTransform) game.modHolderParent.transform;
+            var levelInfoSize = new Vector2(640, 180);
+            var modsSize = new Vector2(420, 96);
+            levelInfoHolder.sizeDelta = levelInfoSize;
+            modsHolder.sizeDelta = modsSize;
+
+            var snapshotsField = typeof(OverlayScreen).GetField(
+                "childSnapshots",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(snapshotsField, Is.Not.Null);
+            var snapshots = (System.Collections.IEnumerable) snapshotsField.GetValue(overlay);
+            foreach (var snapshot in snapshots)
+            {
+                var apply = snapshot.GetType().GetMethod(
+                    "Apply",
+                    BindingFlags.Instance | BindingFlags.Public);
+                Assert.That(apply, Is.Not.Null);
+                apply.Invoke(snapshot, new object[] {Vector4.zero, 1920f});
+            }
+
+            Assert.That(levelInfoHolder.sizeDelta, Is.EqualTo(levelInfoSize));
+            Assert.That(modsHolder.sizeDelta, Is.EqualTo(modsSize));
+        }
+        finally
+        {
+            EditorSceneManager.CloseScene(scene, true);
+        }
+    }
+
+    [Test]
     public void StoryboardColorOverrideWinsOverChartEventColor()
     {
         var scene = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Additive);

@@ -157,6 +157,7 @@ public class OverlayScreen : Screen
         private readonly Vector2 sizeDelta;
         private readonly Vector2 offsetMin;
         private readonly Vector2 offsetMax;
+        private readonly bool preserveLayoutDrivenSize;
 
         public RectTransform RectTransform => rectTransform;
 
@@ -170,6 +171,7 @@ public class OverlayScreen : Screen
             sizeDelta = rectTransform.sizeDelta;
             offsetMin = rectTransform.offsetMin;
             offsetMax = rectTransform.offsetMax;
+            preserveLayoutDrivenSize = rectTransform.GetComponent<ContentSizeFitter>() != null;
         }
 
         public void Apply(Vector4 insets, float referenceWidth)
@@ -179,14 +181,19 @@ public class OverlayScreen : Screen
                 return;
             }
 
+            // ContentSizeFitter-backed holders (notably LevelInfoHolder and ModsHolder) are
+            // populated after OverlayScreen caches its authored scene state. Once gameplay
+            // staticizes those layouts, their current size is the only valid resolved size.
+            // Restoring the pre-content snapshot on a window resize would collapse them to zero.
+            var resolvedSize = preserveLayoutDrivenSize ? rectTransform.sizeDelta : sizeDelta;
+
             rectTransform.anchorMin = anchorMin;
             rectTransform.anchorMax = anchorMax;
             rectTransform.pivot = pivot;
             rectTransform.anchoredPosition = anchoredPosition;
-            rectTransform.sizeDelta = sizeDelta;
 
             var position = anchoredPosition;
-            var size = sizeDelta;
+            var size = resolvedSize;
             var stretchX = IsStretching(anchorMin.x, anchorMax.x);
             var stretchY = IsStretching(anchorMin.y, anchorMax.y);
             if (!stretchX)
@@ -194,7 +201,7 @@ public class OverlayScreen : Screen
                 if (IsLeftAnchored(anchorMin.x, anchorMax.x))
                 {
                     position.x += insets.x;
-                    if (SpansReferenceWidth(referenceWidth))
+                    if (!preserveLayoutDrivenSize && SpansReferenceWidth(referenceWidth, size.x))
                     {
                         size.x = Mathf.Max(0, sizeDelta.x - insets.x - insets.z);
                     }
@@ -233,9 +240,9 @@ public class OverlayScreen : Screen
             }
         }
 
-        private bool SpansReferenceWidth(float referenceWidth)
+        private bool SpansReferenceWidth(float referenceWidth, float width)
         {
-            return referenceWidth > 0 && Mathf.Abs(sizeDelta.x - referenceWidth) <= 1f && Mathf.Approximately(pivot.x, 0);
+            return referenceWidth > 0 && Mathf.Abs(width - referenceWidth) <= 1f && Mathf.Approximately(pivot.x, 0);
         }
 
         private static bool IsStretching(float min, float max) => !Mathf.Approximately(min, max);
