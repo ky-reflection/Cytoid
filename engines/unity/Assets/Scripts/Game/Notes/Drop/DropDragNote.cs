@@ -1,7 +1,9 @@
 using UnityEngine;
 
-// Ported from DragHeadNote judgment. DropDrag is standalone and intentionally does not inherit
-// DragHead chain logic.
+// SYNC-WARNING: DropDrag judgment mirrors DragHeadNote's OnTouch, CalculateGrade, IsAutoEnabled,
+// and PlayHitSound. If you change judgment in either file, update the other. DragHead chain logic
+// (OnGameLateUpdate, Collect, FromNoteModel/ToNoteModel) is INTENTIONALLY NOT inherited — DropDrag
+// is standalone per design decision.
 public class DropDragNote : Note
 {
     protected override NoteRenderer CreateRenderer()

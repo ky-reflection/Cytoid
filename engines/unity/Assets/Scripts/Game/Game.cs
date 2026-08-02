@@ -199,7 +199,7 @@ public partial class Game : MonoBehaviour
                 // Load test level
                 await Context.LevelManager.LoadFromMetadataFiles(LevelType.User, new List<string>
                 {
-                    $"{Context.UserDataPath}/{EditorDefaultLevelDirectory}/level.json"
+                    $"{Application.persistentDataPath}/{EditorDefaultLevelDirectory}/level.json"
                 });
                 Context.SelectedLevel = Context.LevelManager.LoadedLocalLevels.Values.First();
                 Context.SelectedDifficulty = Context.SelectedLevel.Meta.GetHardestDifficulty();
@@ -309,8 +309,6 @@ public partial class Game : MonoBehaviour
         // System config
         Application.targetFrameRate = 120;
         Context.SetAutoRotation(false);
-
-        Level.Record.LastPlayedDate = DateTimeOffset.UtcNow;
 
         // Initialize note pool
         ObjectPool.Initialize();

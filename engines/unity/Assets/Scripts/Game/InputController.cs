@@ -7,7 +7,7 @@ public class InputController : MonoBehaviour
     /// <summary>
     /// Max note-to-note span (seconds) for one FingerDown hit cluster
     /// (true or pseudo simultaneous press). Applies to Click / CDrag head / unheld Hold.
-    /// Candidates are re-clustered each Down by <c>effectiveNoteTime</c> span ≤ this gap
+    /// Candidates are re-clustered each Down by <c>effectiveNoteTime</c> span ? this gap
     /// (no adjacent-gap chain expansion). Soft fallthrough across clusters remains.
     /// In-cluster rank: see <see cref="OrderHitCandidatesByNoteTimeClusters"/>.
     /// Flick stays list-order bind; Drag stays list-order scan.
@@ -128,7 +128,7 @@ public class InputController : MonoBehaviour
             : game.camera.ScreenToWorldPoint(new Vector3(finger.ScreenPosition.x, finger.ScreenPosition.y, 10));
 
         // Drag clears first (settlement order) but does not consume the Down for select.
-        // Arm DragCoHit only on a real hit grade — TryClear also returns true on Miss.
+        // Arm DragCoHit only on a real hit grade ? TryClear also returns true on Miss.
         Note acceptedDrag = null;
         foreach (var note in TouchableDragNotes)
         {
@@ -266,7 +266,7 @@ public class InputController : MonoBehaviour
             if (cleared) FlickingNotes.Remove(finger.Index);
         }
 
-        // Drag: continuous contact — list-order scan
+        // Drag: continuous contact ? list-order scan
         foreach (var note in TouchableDragNotes)
         {
             if (!IsTouchableNote(note)) continue;
@@ -352,9 +352,9 @@ public class InputController : MonoBehaviour
 
     /// <summary>
     /// Order Click / CDrag-head / Hold candidates for one FingerDown.
-    /// Sort by <c>effectiveNoteTime</c>, then split into clusters with span ≤
+    /// Sort by <c>effectiveNoteTime</c>, then split into clusters with span ?
     /// <see cref="NoteClusterGapSeconds"/> (earlier clusters first; soft fallthrough).
-    /// Within a cluster: |Δx| → note time → type (Click/CDrag head before Hold) → id.
+    /// Within a cluster: |?x| ? note time ? type (Click/CDrag head before Hold) ? id.
     /// Flick is never passed here (list-order bind on the scan path).
     /// Not re-entrant: mutates <see cref="hitCandidates"/> / <c>clusterScratch</c> while yielding.
     /// </summary>
@@ -405,7 +405,7 @@ public class InputController : MonoBehaviour
     }
 
     /// <summary>
-    /// In-cluster type rank after |Δx| and note time. Lower = preferred.
+    /// In-cluster type rank after |?x| and note time. Lower = preferred.
     /// Click / CDrag head beat Hold on same-time / same-position ties so chart id
     /// alone does not decide who consumes FingerDown.
     /// </summary>
