@@ -85,16 +85,24 @@ The Unity Activity source lives in the AAR and is NOT editable from this repo. L
 
 ## Build & Debug
 
+Canonical build matrix and operator commands: `docs/build.md`. It distinguishes
+the Android Unity library/AAR, the plugin example smoke APK, the production APK
+owned by sibling `cytoid_flutter`, and the Cytoid Lab Windows player.
+
 Plugin builds: **Cytoid → Build Android/iOS Plugin Artifacts** (`engines/unity/Assets/Scripts/Editor/CytoidCoreBuild.cs`). Storyboard vendor check: **Cytoid → Log Storyboard Effects Backend**.
 
 ### Package identifiers
 
 | Build | Android `applicationId` |
 |-------|-------------------------|
-| Production (ProjectSettings) | `me.tigerhix.cytoid` |
+| Production Cytoid app (sibling `cytoid_flutter`) | `me.tigerhix.cytoid` |
 | Flutter Unity library export | `com.example.cytoid_flutter.unity` |
 | Flutter example app | `com.example.cytoid_flutter` |
 | Flutter plugin namespace | `org.cytoid.gamecore` |
+
+This repository does not define a production APK buildmethod. Its Android
+`ProjectSettings` baseline is the Flutter Unity library identifier, while the
+export method temporarily applies and then restores target-specific settings.
 
 ### Flutter plugin artifacts (primary)
 
@@ -137,7 +145,9 @@ does not create release PRs, tags, GitHub Releases, or dart.dev publications.
 
 ### cytoid_flutter (full app)
 
-Documented in sibling repo: `cytoid_flutter/docs/unity-android-export.md`, `scripts/export_unity_android.sh`.
+The final production APK is owned by the sibling repository, not by this core
+repository. It is documented there at `cytoid_flutter/docs/unity-android-export.md`
+and `scripts/export_unity_android.sh`.
 
 Requires Unity export at `cytoid_flutter/android/unityLibrary/` (set `Cytoid.FlutterUnityLibraryRelativePath` in Unity EditorPrefs if batch export uses the plugin default path).
 
@@ -181,6 +191,7 @@ flutter run
 | `CytoidCoreBuild.ExportAndroidLibraryForFlutter` | Export Gradle library + AAR artifacts |
 | `CytoidCoreBuild.ExportIOSLibraryForFlutter` | Export Xcode project + UnityFramework.xcframework (device) |
 | `CytoidCoreBuild.ExportIOSLibraryForFlutterWithoutPackaging` | Export iOS Xcode project only; CI packages on macOS |
+| `CytoidCoreBuild.BuildCytoidLabWindows64` | Build Cytoid Lab Windows x64 player; omit `-quit` |
 
 ---
 
@@ -243,6 +254,7 @@ Append new rows when architecture or default paths change.
 
 | Topic | Location |
 |-------|----------|
+| Build matrix / commands | `docs/build.md` |
 | Build menu / batchmode | `engines/unity/Assets/Scripts/Editor/CytoidCoreBuild.cs` |
 | CI plugin artifacts | `.github/workflows/flutter-plugin-artifacts.yml` |
 | Vendor asset install | `engines/unity/flutter_plugin/tool/install_vendor_from_archive.sh`, `docs/vendor.md` |

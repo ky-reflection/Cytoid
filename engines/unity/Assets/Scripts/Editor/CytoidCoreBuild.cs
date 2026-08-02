@@ -8,7 +8,8 @@ using UnityEditor.Callbacks;
 using UnityEngine;
 
 /// <summary>
-/// Unity editor and batchmode entry points for cytoid_game_core plugin artifacts only.
+/// Unity editor and batchmode entry points for cytoid_game_core plugin artifacts
+/// and the Cytoid Lab Windows player.
 /// </summary>
 public static class CytoidCoreBuild
 {

@@ -36,6 +36,10 @@ Channels used by the plugin:
 
 ## Unity artifacts
 
+For the complete Android build sequence, including the distinction between the
+plugin example APK and the production Cytoid APK, see
+[`../../../docs/build.md`](../../../docs/build.md).
+
 The plugin can compile without Unity artifacts and will use the mock engine. Install
 runtime artifacts when testing the real Unity core:
 

@@ -2,6 +2,12 @@
 
 Stable references tracked in git. Work-in-progress notes live in `docs/local/` (gitignored).
 
+## Build
+
+| Document | Purpose |
+|----------|---------|
+| [build.md](build.md) | Android Unity artifacts, example/production APK boundary, and Cytoid Lab builds |
+
 ## Lab
 
 | Document | Purpose |

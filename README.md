@@ -20,6 +20,14 @@ The Unity core is embedded via the `cytoid_game_core` Flutter plugin at `engines
 
 See `docs/host-protocol-v2.md` for the current protocol specification.
 
+### Build outputs
+
+This repository builds Android Unity plugin artifacts, a Flutter integration
+test APK, and Cytoid Lab for Windows. The production Cytoid APK is assembled in
+the separate `cytoid_flutter` application repository. See
+[docs/build.md](docs/build.md) for the target matrix, prerequisites, commands,
+outputs, and troubleshooting.
+
 ### Unity Assets
 
 Licensed Unity packages are optional: unzip a maintainer **`Assets/Vendor/`** bundle at `engines/unity/`. See [docs/vendor.md](docs/vendor.md). Without it, in-repo fallbacks (e.g. storyboard shaders) are used.

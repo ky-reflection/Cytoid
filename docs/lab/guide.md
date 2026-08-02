@@ -69,6 +69,10 @@ Bridge / mobile builds are unaffected (`GameEmbedMode.IsBridgeEmbedded` gates La
 
 ## Build
 
+The canonical cross-target build guide is [../build.md](../build.md). For Lab
+release builds, prefer the PowerShell wrapper because it performs cleanup,
+stale-output validation, optional zip packaging, and optional launch.
+
 **Unity menu:** `Cytoid → Build Cytoid Lab (Windows x64)`
 
 **PowerShell:**
@@ -88,6 +92,9 @@ Do not pass `-quit`: the build waits for any target-switch script compilation th
 `EditorApplication.update` and exits batchmode explicitly when finished.
 
 **Output:** `engines/unity/Builds/CytoidLab/CytoidLab.exe`
+
+Release zip: `./engines/unity/build-cytoid-lab.ps1 -Package -KeepLog` →
+`engines/unity/Builds/CytoidLab.zip`
 
 | Setting | Value |
 |---------|-------|
