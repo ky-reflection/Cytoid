@@ -1,10 +1,10 @@
-ï»¿using System;
+using System;
 using System.Linq;
 
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
-public class DragHeadNote : Note
+public partial class DragHeadNote : Note
 {
     protected override NoteRenderer CreateRenderer()
     {
@@ -165,9 +165,9 @@ public class DragHeadNote : Note
     // SYNC-WARNING: DropDrag judgment is a verbatim copy of DragHeadNote's CanHandleTouch, CalculateGrade,
     // IsAutoEnabled, and PlayHitSound (DragHeadNote.cs:165-252). If you change judgment in either
     // file, update the other. DragHead chain logic (OnGameLateUpdate, Collect, FromNoteModel/ToNoteModel)
-    // is INTENTIONALLY NOT inherited â€” DropDrag is standalone per design decision.
-    // NOTE: DragHead's cross-page check is redundant for drop notes (5Ã—pageDuration >> Page.Duration/2
-    // always, so the 0.31s check dominates) â€” safe to copy verbatim, do not remove.
+    // is INTENTIONALLY NOT inherited ¡ª DropDrag is standalone per design decision.
+    // NOTE: DragHead's cross-page check is redundant for drop notes (5¡ÁpageDuration >> Page.Duration/2
+    // always, so the 0.31s check dominates) ¡ª safe to copy verbatim, do not remove.
     // Mirror: Assets/Scripts/Game/Notes/Drop/DropDragNote.cs
     public override bool CanHandleTouch()
     {
