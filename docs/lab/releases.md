@@ -6,6 +6,52 @@ Build artifact: `.\engines\unity\build-cytoid-lab.ps1 -Package -KeepLog` → `en
 
 ---
 
+## v0.2.0
+
+**Tag:** `cytoid-lab-v0.2.0` · **Title:** Cytoid Lab v0.2.0
+
+### English
+
+Windows 10/11 x64 · Unity **6000.0.75f1** core
+
+Demo-client release: newer chart/runtime surface from Cytoid core, plus Lab workflow improvements. Judgment tweaks from upstream are included for chart fidelity but are not the focus of this Lab build.
+
+#### What's new
+
+- **Multi-select import** — pick several levels in one import pass
+- **C2V3 / Drop charts** — page functions and DropClick / DropDrag notes play in Lab
+- **C2 UI & message events** — chart UI / message presentation (including color parsing for classic C2 message suffixes)
+- **Overlay resize** — level-info / mods holders keep resolved sizes when the window is resized
+- **Core sync** — Lab ships the latest Cytoid core runtime used for accurate chart demo playback
+
+#### Known limitations
+
+- Windows only
+- Storyboard video may still show as a still image on some charts ([#5](https://github.com/ky-reflection/Cytoid/issues/5))
+
+Player log: `%USERPROFILE%\AppData\LocalLow\TigerHix\Cytoid Lab\Player.log`
+
+### 中文
+
+Windows 10/11 x64 · Unity **6000.0.75f1** core
+
+演示客户端版本：同步 Cytoid 主干的谱面/运行时能力，并改进 Lab 工作流。上游判定改动已带入以保证演示贴近正式客户端，但不是本版 Lab 的重点。
+
+#### 更新内容
+
+- **多选导入** — 一次选择导入多个关卡
+- **C2V3 / Drop 谱面** — Lab 可播 page 函数与 DropClick / DropDrag
+- **C2 UI / Message 事件** — 谱面 UI 与 message 表现（含经典 C2 message 颜色后缀解析）
+- **Overlay 缩放** — 窗口缩放时保留关卡信息 / Mods 布局尺寸
+- **内核同步** — 带上最新 Cytoid core，便于准确演示谱面
+
+#### 已知限制
+
+- 仅 Windows
+- 部分谱面 storyboard 视频仍可能定格 ([#5](https://github.com/ky-reflection/Cytoid/issues/5))
+
+---
+
 ## v0.1.3
 
 **Tag:** `cytoid-lab-v0.1.3` · **Title:** Cytoid Lab v0.1.3
