@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -25,6 +25,14 @@ public abstract partial class Note : MonoBehaviour
     public float MissThreshold { get; set; }
 
     public bool IsCleared { get; private set; }
+    public bool IsArmed { get; private set; }
+    private NoteGrade armedGrade = NoteGrade.None;
+    /// <summary>
+    /// When set, the next <see cref="Clear"/> joins a deferred drag-stack soft budget
+    /// (see <see cref="MarkDragStackBudget"/>).
+    /// </summary>
+    private bool dragStackBudgetPending;
+    private int dragStackBudgetId;
 
     // For ranked mode: weighted difference between the current timing and the perfect timing
     public float GreatGradeWeight { get; protected set; }
@@ -47,7 +55,11 @@ public abstract partial class Note : MonoBehaviour
     public virtual void SetData(int noteId)
     {
         IsCollected = false;
-
+        IsArmed = false;
+        armedGrade = NoteGrade.None;
+        dragStackBudgetPending = false;
+        dragStackBudgetId = 0;
+    
         Chart = Game.Chart.Model;
         Model = Game.Chart.Model.note_map[noteId];
         if (Model.next_id > 0 && Chart.note_map.ContainsKey(Model.next_id))
@@ -89,6 +101,10 @@ public abstract partial class Note : MonoBehaviour
         Page = default;
         MissThreshold = default;
         IsCleared = default;
+        IsArmed = default;
+        armedGrade = NoteGrade.None;
+        dragStackBudgetPending = false;
+        dragStackBudgetId = 0;
         GreatGradeWeight = default;
         JudgmentOffset = default;
     }
@@ -97,19 +113,58 @@ public abstract partial class Note : MonoBehaviour
     {
         if (IsCleared) return;
 
+        IsArmed = false;
+        armedGrade = NoteGrade.None;
         IsCleared = true;
-        Renderer.OnClear(grade);
-        Game.State.Judge(this, grade, -TimeUntilEnd, GreatGradeWeight);
-        Game.onNoteJudged.Invoke(Game, this, new JudgeData(grade, -TimeUntilEnd, GreatGradeWeight));
 
-        // Hit sound
-        if (grade != NoteGrade.Miss && (!(this is HoldNote) || Context.Player.Settings.HoldHitSoundTiming.Let(it => it == HoldHitSoundTiming.End || it == HoldHitSoundTiming.Both)))
+        // Deferred multi-note drag stacks join a per-stack soft budget for this Clear only.
+        // Ordinary Click/Flick/Hold/Auto clears remain uncapped even in the same frame.
+        var effects = Game.effectController;
+        var joinedDragStackBudget = false;
+        if (dragStackBudgetPending)
         {
-            PlayHitSound();
+            dragStackBudgetPending = false;
+            var stackId = dragStackBudgetId;
+            dragStackBudgetId = 0;
+            effects.EnterDragStackClear(
+                EffectController.MaxClearFxPerDragBatch,
+                EffectController.MaxHitSoundsPerDragBatch,
+                stackId);
+            joinedDragStackBudget = true;
+        }
+
+        try
+        {
+            Renderer.OnClear(grade);
+            Game.State.Judge(this, grade, -TimeUntilEnd, GreatGradeWeight);
+            Game.onNoteJudged.Invoke(Game, this, new JudgeData(grade, -TimeUntilEnd, GreatGradeWeight));
+
+            // Hit sound (drag-stack budget via EffectController when this clear participates)
+            if (grade != NoteGrade.Miss &&
+                (!(this is HoldNote) || Context.Player.Settings.HoldHitSoundTiming.Let(it => it == HoldHitSoundTiming.End || it == HoldHitSoundTiming.Both)) &&
+                effects.TryConsumeHitSound())
+            {
+                PlayHitSound();
+            }
+        }
+        finally
+        {
+            if (joinedDragStackBudget) effects.ExitDragStackClear();
         }
 
         Game.onNoteClear.Invoke(Game, this);
         AwaitAndCollect();
+    }
+
+    /// <summary>
+    /// Marks this note so its later armed <see cref="Clear"/> shares the co-located
+    /// drag-stack FX/SFX budget with siblings that received the same
+    /// <paramref name="stackId"/>.
+    /// </summary>
+    public void MarkDragStackBudget(int stackId)
+    {
+        dragStackBudgetPending = true;
+        dragStackBudgetId = stackId;
     }
 
     public virtual void PlayHitSound()
@@ -129,28 +184,38 @@ public abstract partial class Note : MonoBehaviour
             // Update position
             gameObject.transform.localPosition = Model.CalculatePosition(Game.Chart);
 
-            // Autoplay — Cytoid Lab: skip during timeline scrub/resync so Auto does not call
-            // UpdateFinger (clears timeline hold state) or Clear notes mid-preview (RC-7, RC-10).
-            // SuppressTimelineGameplayMutations lives on Game.CytoidLab; false in normal play.
-            if (!Game.SuppressTimelineGameplayMutations && IsAutoEnabled())
+            if (IsArmed)
             {
-                if (TimeUntilStart < 0)
+                if (Game.Time >= Model.start_time + JudgmentOffset)
                 {
-                    if (this is HoldNote)
-                    {
-                        ((HoldNote) this).UpdateFinger(0, true);
-                    }
-                    else
-                    {
-                        Clear(NoteGrade.Perfect);
-                    }
+                    Clear(armedGrade);
                 }
             }
-
-            // Miss while paused/scrubbing would clear notes before visual state is written.
-            if (!Game.SuppressTimelineGameplayMutations && ShouldMiss())
+            else
             {
-                Clear(NoteGrade.Miss);
+                // Autoplay — Cytoid Lab: skip during timeline scrub/resync so Auto does not call
+                // UpdateFinger (clears timeline hold state) or Clear notes mid-preview (RC-7, RC-10).
+                // SuppressTimelineGameplayMutations lives on Game.CytoidLab; false in normal play.
+                if (!Game.SuppressTimelineGameplayMutations && IsAutoEnabled())
+                {
+                    if (TimeUntilStart < 0)
+                    {
+                        if (this is HoldNote)
+                        {
+                            ((HoldNote) this).UpdateFinger(0, true);
+                        }
+                        else
+                        {
+                            Clear(NoteGrade.Perfect);
+                        }
+                    }
+                }
+
+                // Miss while paused/scrubbing would clear notes before visual state is written.
+                if (!Game.SuppressTimelineGameplayMutations && ShouldMiss())
+                {
+                    Clear(NoteGrade.Miss);
+                }
             }
         }
 
@@ -221,8 +286,51 @@ public abstract partial class Note : MonoBehaviour
     /// <returns>True if this note took the touch (cleared or otherwise handled).</returns>
     public virtual bool OnTouch(Vector2 screenPos)
     {
-        if (!Game.IsLoaded || !Game.State.IsPlaying) return false;
+        if (!CanHandleTouch()) return false;
         return TryClear();
+    }
+
+    /// <summary>
+    /// Handles passive contact from an already-down finger. A valid early hit is armed
+    /// and resolves at the effective perfect time; a hit at or after that time resolves
+    /// immediately. Misses retain the existing immediate settlement behavior.
+    /// </summary>
+    public virtual bool OnTouchDeferred(Vector2 screenPos)
+    {
+        if (!CanHandleTouch() || IsArmed) return false;
+
+        var grade = GetTouchGrade();
+        if (grade == NoteGrade.None) return false;
+        if (grade == NoteGrade.Miss || Game.Time >= Model.start_time + JudgmentOffset)
+        {
+            Clear(grade);
+        }
+        else
+        {
+            IsArmed = true;
+            armedGrade = grade;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Returns whether this note may consider a touch at the current chart time.
+    /// Drag variants extend this with their early and cross-page admission gates.
+    /// </summary>
+    public virtual bool CanHandleTouch()
+    {
+        return Game.IsLoaded && Game.State.IsPlaying && !IsCollected && !IsCleared && !IsArmed;
+    }
+
+    /// <summary>
+    /// Side-effect-free preview of the grade that an immediate touch would settle with,
+    /// apart from CalculateGrade's existing GreatGradeWeight calculation.
+    /// </summary>
+    public NoteGrade GetTouchGrade()
+    {
+        if (IsAutoEnabled()) return NoteGrade.Perfect;
+        if (ShouldMiss()) return NoteGrade.Miss;
+        return CalculateGrade();
     }
 
     /// <returns>
@@ -231,10 +339,8 @@ public abstract partial class Note : MonoBehaviour
     /// </returns>
     public virtual bool TryClear()
     {
-        if (IsCleared) return false;
-        if (IsAutoEnabled()) Clear(NoteGrade.Perfect);
-        if (ShouldMiss()) Clear(NoteGrade.Miss);
-        var grade = CalculateGrade();
+        if (IsCleared || IsArmed) return false;
+        var grade = GetTouchGrade();
         if (grade != NoteGrade.None) Clear(grade);
         return IsCleared;
     }
