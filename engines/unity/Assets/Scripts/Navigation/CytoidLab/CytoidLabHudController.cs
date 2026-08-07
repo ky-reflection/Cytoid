@@ -89,6 +89,8 @@ public class CytoidLabHudController : MonoBehaviour
         try
         {
             BuildHud();
+            Canvas.ForceUpdateCanvases();
+            CytoidLabUi.RefreshRoundedCorners();
             Debug.Log("[CytoidLab] HUD built successfully.");
         }
         catch (Exception e)
@@ -253,7 +255,8 @@ public class CytoidLabHudController : MonoBehaviour
         topRect.pivot = new Vector2(0.5f, 1);
         topRect.sizeDelta = new Vector2(0, CytoidLabShell.TopHudOverlayHeightPx);
         var topImage = topBar.gameObject.AddComponent<Image>();
-        topImage.color = new Color(0, 0, 0, 0.55f);
+        topImage.color = new Color(0.06f, 0.07f, 0.10f, 0.82f);
+        CytoidLabUi.ApplyRoundedCorners(topImage, CytoidLabUi.PanelRadius);
         topBar.gameObject.AddComponent<CanvasGroup>();
         var topHlg = topBar.gameObject.AddComponent<HorizontalLayoutGroup>();
         topHlg.padding = new RectOffset(6, 6, 2, 2);
@@ -333,7 +336,8 @@ public class CytoidLabHudController : MonoBehaviour
         bottomRect.pivot = new Vector2(0.8f, 0);
         bottomRect.sizeDelta = new Vector2(0, CytoidLabShell.BottomHudOverlayHeightPx);
         var bottomImage = bottomBar.gameObject.AddComponent<Image>();
-        bottomImage.color = new Color(0, 0, 0, 0.55f);
+        bottomImage.color = new Color(0.06f, 0.07f, 0.10f, 0.82f);
+        CytoidLabUi.ApplyRoundedCorners(bottomImage, CytoidLabUi.PanelRadius);
         bottomBar.gameObject.AddComponent<CanvasGroup>();
         var bottomHlg = bottomBar.gameObject.AddComponent<HorizontalLayoutGroup>();
         bottomHlg.padding = new RectOffset(8, 8, 2, 2);
@@ -372,8 +376,9 @@ public class CytoidLabHudController : MonoBehaviour
         sliderBgRect.pivot = new Vector2(0.5f, 0.5f);
         sliderBgRect.sizeDelta = new Vector2(0f, TimelineTrackHeight);
         var sliderBgImage = sliderBg.AddComponent<Image>();
-        sliderBgImage.color = new Color(0.2f, 0.2f, 0.2f);
+        sliderBgImage.color = new Color(0.18f, 0.20f, 0.26f, 1f);
         sliderBgImage.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(sliderBgImage, TimelineTrackHeight * 0.5f);
 
         var fillArea = CreateUiObject("Fill Area", sliderGo.transform);
         var fillAreaRect = fillArea.GetComponent<RectTransform>();
@@ -388,8 +393,9 @@ public class CytoidLabHudController : MonoBehaviour
         fillRect.anchorMax = Vector2.one;
         fillRect.sizeDelta = Vector2.zero;
         var fillImage = fill.AddComponent<Image>();
-        fillImage.color = new Color(0.3f, 0.6f, 1f);
+        fillImage.color = new Color(0.35f, 0.58f, 0.95f, 1f);
         fillImage.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(fillImage, TimelineTrackHeight * 0.5f);
 
         var handleInset = TimelineHandleSize * 0.5f;
         var handleArea = CreateUiObject("Handle Slide Area", sliderGo.transform);
@@ -413,9 +419,9 @@ public class CytoidLabHudController : MonoBehaviour
         handleVisualRect.pivot = new Vector2(0.5f, 0.5f);
         handleVisualRect.sizeDelta = new Vector2(TimelineHandleSize, TimelineHandleSize);
         var handleVisualImage = handleVisual.AddComponent<Image>();
-        handleVisualImage.sprite = handleImage.sprite;
         handleVisualImage.color = Color.white;
         handleVisualImage.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(handleVisualImage, TimelineHandleSize * 0.5f);
         handleImage.color = new Color(1f, 1f, 1f, 0f);
 
         timeSlider.fillRect = fillRect;
@@ -465,12 +471,14 @@ public class CytoidLabHudController : MonoBehaviour
     {
         var go = CreateUiObject("Button", parent);
         var image = go.AddComponent<Image>();
-        image.color = new Color(0.25f, 0.35f, 0.55f);
+        image.color = Color.white;
         image.type = Image.Type.Simple;
+        CytoidLabUi.ApplyRoundedCorners(image, CytoidLabUi.ButtonRadius);
 
         var btn = go.AddComponent<Button>();
         btn.onClick.AddListener(onClick);
         CytoidLabUiInput.DisableKeyboardNavigation(btn);
+        CytoidLabUi.ApplyRoundedButtonColors(btn);
 
         // LayoutElement is required by callers that set preferredWidth.
         var layout = go.AddComponent<LayoutElement>();

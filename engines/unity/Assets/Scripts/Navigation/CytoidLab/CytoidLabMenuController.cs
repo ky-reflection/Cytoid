@@ -70,6 +70,8 @@ public class CytoidLabMenuController : MonoBehaviour
         try
         {
             BuildUi();
+            Canvas.ForceUpdateCanvases();
+            CytoidLabUi.RefreshRoundedCorners();
             Debug.Log("[CytoidLab] Menu UI built successfully.");
         }
         catch (Exception e)
@@ -132,7 +134,7 @@ public class CytoidLabMenuController : MonoBehaviour
         bgRect.offsetMin = Vector2.zero;
         bgRect.offsetMax = Vector2.zero;
         var bgImage = bgGo.AddComponent<Image>();
-        bgImage.color = new Color(0.05f, 0.05f, 0.08f, 1f);
+        bgImage.color = new Color(0.05f, 0.055f, 0.08f, 1f);
 
         BuildCornerButtons(canvas.transform);
 
@@ -158,11 +160,7 @@ public class CytoidLabMenuController : MonoBehaviour
         updateButton.gameObject.SetActive(false);
         var updateLe = updateButton.GetComponent<LayoutElement>();
         updateLe.preferredHeight = ButtonHeight;
-        var updateColors = updateButton.colors;
-        updateColors.normalColor = new Color(0.25f, 0.55f, 0.95f);
-        updateColors.highlightedColor = new Color(0.35f, 0.65f, 1f);
-        updateColors.pressedColor = new Color(0.18f, 0.42f, 0.78f);
-        updateButton.colors = updateColors;
+        CytoidLabUi.ApplyRoundedButtonColors(updateButton, CytoidLabUi.AccentBlue);
         updateButtonLabel = updateButton.GetComponentInChildren<Text>();
 
         selectionHintText = CreateText(root,
@@ -208,16 +206,20 @@ public class CytoidLabMenuController : MonoBehaviour
         var scrollComp = scroll.AddComponent<ScrollRect>();
         levelScrollRect = scrollComp;
 
-        const float scrollbarWidth = 12f;
+        const float scrollbarWidth = 10f;
 
         var viewport = CreateUiObject("Viewport", scroll.transform);
         var vpRect = viewport.GetComponent<RectTransform>();
         vpRect.anchorMin = Vector2.zero;
         vpRect.anchorMax = Vector2.one;
         vpRect.offsetMin = Vector2.zero;
-        vpRect.offsetMax = new Vector2(-scrollbarWidth, 0);
-        viewport.AddComponent<RectMask2D>();
-        viewport.AddComponent<Image>().color = new Color(0, 0, 0, 0.2f);
+        vpRect.offsetMax = new Vector2(-(scrollbarWidth + 6f), 0);
+        // RoundedCorners materials do not honor RectMask2D clip rects; use stencil Mask instead.
+        var viewportBg = viewport.AddComponent<Image>();
+        viewportBg.color = CytoidLabUi.PanelColor;
+        CytoidLabUi.ApplyRoundedCorners(viewportBg, CytoidLabUi.PanelRadius);
+        var viewportMask = viewport.AddComponent<Mask>();
+        viewportMask.showMaskGraphic = true;
 
         levelListRoot = CreateUiObject("LevelList", viewport.transform).transform;
         var listRect = levelListRoot.GetComponent<RectTransform>();
@@ -227,8 +229,8 @@ public class CytoidLabMenuController : MonoBehaviour
         listRect.anchoredPosition = Vector2.zero;
         listRect.sizeDelta = new Vector2(0, 0);
         var listVlg = levelListRoot.gameObject.AddComponent<VerticalLayoutGroup>();
-        listVlg.spacing = 4;
-        listVlg.padding = new RectOffset(0, 0, 0, 8);
+        listVlg.spacing = 6;
+        listVlg.padding = new RectOffset(4, 4, 4, 8);
         listVlg.childControlWidth = true;
         listVlg.childControlHeight = true;
         listVlg.childForceExpandWidth = true;
@@ -244,12 +246,25 @@ public class CytoidLabMenuController : MonoBehaviour
         var sb = scrollbar.AddComponent<Scrollbar>();
         sb.direction = Scrollbar.Direction.BottomToTop;
         var sbBg = scrollbar.AddComponent<Image>();
-        sbBg.color = new Color(0.1f, 0.1f, 0.1f, 0.5f);
-        var sbHandle = CreateUiObject("Handle", scrollbar.transform);
+        sbBg.color = new Color(0.10f, 0.12f, 0.16f, 0.7f);
+        CytoidLabUi.ApplyRoundedCorners(sbBg, scrollbarWidth * 0.5f);
+
+        var slidingArea = CreateUiObject("Sliding Area", scrollbar.transform);
+        var slidingRect = slidingArea.GetComponent<RectTransform>();
+        slidingRect.anchorMin = Vector2.zero;
+        slidingRect.anchorMax = Vector2.one;
+        slidingRect.offsetMin = new Vector2(1f, 2f);
+        slidingRect.offsetMax = new Vector2(-1f, -2f);
+
+        var sbHandle = CreateUiObject("Handle", slidingArea.transform);
         var sbHandleRect = sbHandle.GetComponent<RectTransform>();
-        sbHandleRect.sizeDelta = new Vector2(scrollbarWidth, scrollbarWidth);
+        sbHandleRect.anchorMin = Vector2.zero;
+        sbHandleRect.anchorMax = Vector2.one;
+        sbHandleRect.offsetMin = Vector2.zero;
+        sbHandleRect.offsetMax = Vector2.zero;
         var sbHandleImage = sbHandle.AddComponent<Image>();
-        sbHandleImage.color = new Color(0.3f, 0.6f, 1f);
+        sbHandleImage.color = new Color(0.38f, 0.58f, 0.90f, 0.95f);
+        CytoidLabUi.ApplyRoundedCorners(sbHandleImage, (scrollbarWidth - 2f) * 0.5f);
         sb.targetGraphic = sbHandleImage;
         sb.handleRect = sbHandleRect;
 
@@ -285,14 +300,18 @@ public class CytoidLabMenuController : MonoBehaviour
         startLe.preferredHeight = ButtonHeight;
         startLe.preferredWidth = 132;
         startLe.flexibleWidth = 0;
-        var startColors = startButton.colors;
-        startColors.normalColor = new Color(0.2f, 0.8f, 0.3f);
-        startColors.highlightedColor = new Color(0.28f, 0.88f, 0.38f);
-        startColors.pressedColor = new Color(0.15f, 0.65f, 0.22f);
-        startButton.colors = startColors;
+        CytoidLabUi.ApplyRoundedButtonColors(startButton, CytoidLabUi.AccentGreen);
+        // SoftButton-style pill radius on difficulty / start row.
+        var startImage = startButton.GetComponent<Image>();
+        if (startImage != null) CytoidLabUi.ApplyRoundedCorners(startImage, CytoidLabUi.SoftRadius);
 
         selectedDifficulty = Difficulty.Hard;
         UpdateDifficultyButtons();
+        foreach (var pair in difficultyButtonMap)
+        {
+            var image = pair.Value.GetComponent<Image>();
+            if (image != null) CytoidLabUi.ApplyRoundedCorners(image, CytoidLabUi.SoftRadius);
+        }
     }
 
     private static void ApplyLabMenuDefaults()
@@ -425,13 +444,11 @@ public class CytoidLabMenuController : MonoBehaviour
         rect.sizeDelta = size;
 
         var image = go.AddComponent<Image>();
-        image.color = new Color(0.22f, 0.34f, 0.52f, 0.95f);
+        image.color = Color.white;
+        CytoidLabUi.ApplyRoundedCorners(image, CytoidLabUi.ButtonRadius);
 
         var btn = go.AddComponent<Button>();
-        var colors = btn.colors;
-        colors.highlightedColor = new Color(0.32f, 0.48f, 0.72f);
-        colors.pressedColor = new Color(0.16f, 0.24f, 0.38f);
-        btn.colors = colors;
+        CytoidLabUi.ApplyRoundedButtonColors(btn);
         btn.onClick.AddListener(onClick);
         CytoidLabUiInput.DisableKeyboardNavigation(btn);
 
@@ -476,13 +493,15 @@ public class CytoidLabMenuController : MonoBehaviour
         var go = CreateUiObject("Button", parent);
         var image = go.AddComponent<Image>();
         if (image == null) throw new InvalidOperationException("Failed to add Image to button.");
-        image.color = new Color(0.25f, 0.35f, 0.55f);
+        image.color = Color.white;
         image.type = Image.Type.Simple;
+        CytoidLabUi.ApplyRoundedCorners(image, CytoidLabUi.ButtonRadius);
 
         var btn = go.AddComponent<Button>();
         if (btn == null) throw new InvalidOperationException("Failed to add Button component.");
         btn.onClick.AddListener(onClick);
         CytoidLabUiInput.DisableKeyboardNavigation(btn);
+        CytoidLabUi.ApplyRoundedButtonColors(btn);
 
         // LayoutElement is required by callers that set preferredHeight/Width.
         var buttonLe = go.AddComponent<LayoutElement>();
@@ -517,12 +536,14 @@ public class CytoidLabMenuController : MonoBehaviour
         rect.sizeDelta = new Vector2(size, size);
 
         var image = go.AddComponent<Image>();
-        image.color = new Color(0.25f, 0.35f, 0.55f);
+        image.color = Color.white;
+        CytoidLabUi.ApplyRoundedCorners(image, CytoidLabUi.IconRadius);
 
         var btn = go.AddComponent<Button>();
         btn.targetGraphic = image;
         btn.onClick.AddListener(onClick);
         CytoidLabUiInput.DisableKeyboardNavigation(btn);
+        CytoidLabUi.ApplyRoundedButtonColors(btn);
 
         var le = go.AddComponent<LayoutElement>();
         le.preferredWidth = size;
@@ -542,6 +563,7 @@ public class CytoidLabMenuController : MonoBehaviour
         var tabImage = tab.AddComponent<Image>();
         tabImage.color = new Color(1f, 0.86f, 0.35f, 1f);
         tabImage.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(tabImage, 3f);
 
         var body = CreateUiObject("FolderBody", go.transform);
         var bodyRect = body.GetComponent<RectTransform>();
@@ -552,6 +574,7 @@ public class CytoidLabMenuController : MonoBehaviour
         var bodyImage = body.AddComponent<Image>();
         bodyImage.color = new Color(1f, 0.78f, 0.2f, 1f);
         bodyImage.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(bodyImage, 4f);
 
         return btn;
     }
@@ -662,7 +685,7 @@ public class CytoidLabMenuController : MonoBehaviour
             var rowImage = pair.Value.GetComponent<Image>();
             if (rowImage == null) continue;
             var isSelected = pair.Key.Meta.id == level.Meta.id;
-            rowImage.color = isSelected ? new Color(0.2f, 0.35f, 0.55f, 1f) : new Color(0.12f, 0.12f, 0.16f, 1f);
+            rowImage.color = isSelected ? CytoidLabUi.RowSelectedColor : CytoidLabUi.RowColor;
         }
 
         if (selectedDifficulty == null || !LevelHasChart(level, selectedDifficulty))
@@ -822,6 +845,7 @@ public class CytoidLabMenuController : MonoBehaviour
 
         Canvas.ForceUpdateCanvases();
         LayoutRebuilder.ForceRebuildLayoutImmediate(levelListRoot as RectTransform);
+        CytoidLabUi.RefreshRoundedCorners();
 
         if (levelScrollRect != null)
         {
@@ -847,22 +871,25 @@ public class CytoidLabMenuController : MonoBehaviour
         rowLe.minHeight = LevelRowHeight;
 
         var rowImage = row.gameObject.AddComponent<Image>();
-        rowImage.color = new Color(0.12f, 0.12f, 0.16f, 1f);
+        rowImage.color = CytoidLabUi.RowColor;
         rowImage.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(rowImage, CytoidLabUi.PanelRadius);
 
         var rowHlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
         rowHlg.spacing = UiSpacing;
-        rowHlg.padding = new RectOffset(8, 8, 4, 4);
+        rowHlg.padding = new RectOffset(10, 10, 6, 6);
         rowHlg.childAlignment = TextAnchor.MiddleLeft;
         rowHlg.childControlWidth = true;
         rowHlg.childControlHeight = true;
         rowHlg.childForceExpandWidth = false;
-        rowHlg.childForceExpandHeight = true;
+        rowHlg.childForceExpandHeight = false;
 
         var infoGo = CreateUiObject("Info", row);
         var infoLe = infoGo.AddComponent<LayoutElement>();
         infoLe.flexibleWidth = 1;
         infoLe.minWidth = 200;
+        infoLe.preferredHeight = LevelRowHeight - 12;
+        infoLe.flexibleHeight = 1;
         var infoHit = infoGo.AddComponent<Image>();
         infoHit.color = Color.clear;
         var infoButton = infoGo.AddComponent<Button>();
@@ -887,16 +914,84 @@ public class CytoidLabMenuController : MonoBehaviour
         infoText.resizeTextForBestFit = false;
         infoText.raycastTarget = false;
 
-        var deleteButton = CreateButton(row, "Delete", () => OnDeleteLevelClicked(localLevel));
-        var deleteLe = deleteButton.GetComponent<LayoutElement>();
-        deleteLe.preferredWidth = 80;
-        var deleteColors = deleteButton.colors;
-        deleteColors.normalColor = new Color(0.6f, 0.2f, 0.2f);
-        deleteColors.highlightedColor = new Color(0.8f, 0.25f, 0.25f);
-        deleteColors.pressedColor = new Color(0.5f, 0.15f, 0.15f);
-        deleteButton.colors = deleteColors;
+        CreateTrashIconButton(row, () => OnDeleteLevelClicked(localLevel));
 
         levelRowMap[level] = row;
+    }
+
+    private Button CreateTrashIconButton(Transform parent, UnityEngine.Events.UnityAction onClick)
+    {
+        const float size = 36f;
+
+        var go = CreateUiObject("DeleteButton", parent);
+        var image = go.AddComponent<Image>();
+        image.color = Color.white;
+        CytoidLabUi.ApplyRoundedCorners(image, CytoidLabUi.IconRadius);
+
+        var btn = go.AddComponent<Button>();
+        btn.targetGraphic = image;
+        btn.onClick.AddListener(onClick);
+        CytoidLabUiInput.DisableKeyboardNavigation(btn);
+        CytoidLabUi.ApplyRoundedButtonColors(btn, CytoidLabUi.DangerColor);
+
+        var le = go.AddComponent<LayoutElement>();
+        le.preferredWidth = size;
+        le.preferredHeight = size;
+        le.minWidth = size;
+        le.minHeight = size;
+        le.flexibleWidth = 0;
+        le.flexibleHeight = 0;
+
+        // Procedural trash-can glyph (lid + body + slots).
+        var lid = CreateUiObject("Lid", go.transform);
+        var lidRect = lid.GetComponent<RectTransform>();
+        lidRect.anchorMin = new Vector2(0.22f, 0.68f);
+        lidRect.anchorMax = new Vector2(0.78f, 0.78f);
+        lidRect.offsetMin = Vector2.zero;
+        lidRect.offsetMax = Vector2.zero;
+        var lidImage = lid.AddComponent<Image>();
+        lidImage.color = new Color(1f, 0.92f, 0.92f, 0.95f);
+        lidImage.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(lidImage, 2f);
+
+        var handle = CreateUiObject("Handle", go.transform);
+        var handleRect = handle.GetComponent<RectTransform>();
+        handleRect.anchorMin = new Vector2(0.40f, 0.78f);
+        handleRect.anchorMax = new Vector2(0.60f, 0.88f);
+        handleRect.offsetMin = Vector2.zero;
+        handleRect.offsetMax = Vector2.zero;
+        var handleImage = handle.AddComponent<Image>();
+        handleImage.color = new Color(1f, 0.92f, 0.92f, 0.95f);
+        handleImage.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(handleImage, 2f);
+
+        var body = CreateUiObject("Body", go.transform);
+        var bodyRect = body.GetComponent<RectTransform>();
+        bodyRect.anchorMin = new Vector2(0.26f, 0.18f);
+        bodyRect.anchorMax = new Vector2(0.74f, 0.68f);
+        bodyRect.offsetMin = Vector2.zero;
+        bodyRect.offsetMax = Vector2.zero;
+        var bodyImage = body.AddComponent<Image>();
+        bodyImage.color = new Color(1f, 0.92f, 0.92f, 0.95f);
+        bodyImage.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(bodyImage, 3f);
+
+        for (var i = 0; i < 3; i++)
+        {
+            var slot = CreateUiObject($"Slot{i}", go.transform);
+            var slotRect = slot.GetComponent<RectTransform>();
+            var x = 0.36f + i * 0.12f;
+            slotRect.anchorMin = new Vector2(x, 0.28f);
+            slotRect.anchorMax = new Vector2(x + 0.04f, 0.58f);
+            slotRect.offsetMin = Vector2.zero;
+            slotRect.offsetMax = Vector2.zero;
+            var slotImage = slot.AddComponent<Image>();
+            slotImage.color = new Color(0.55f, 0.18f, 0.22f, 0.9f);
+            slotImage.raycastTarget = false;
+            CytoidLabUi.ApplyRoundedCorners(slotImage, 1.5f);
+        }
+
+        return btn;
     }
 
     private static string GetLevelTitle(Level level)
@@ -992,12 +1087,19 @@ public class CytoidLabMenuController : MonoBehaviour
         if (paths.Count == 0) return;
 
         SetStatus(paths.Count == 1
-            ? $"Installing {Path.GetFileName(paths[0])}..."
-            : $"Installing {paths.Count} levels...");
+            ? $"Importing 1/1: {Path.GetFileName(paths[0])}..."
+            : $"Importing 0/{paths.Count}...");
         try
         {
             // Keep the source files; the user picked them from their own storage.
-            var installed = await Context.LevelManager.InstallLevels(paths, LevelType.User, deleteSource: false);
+            var installed = await Context.LevelManager.InstallLevels(
+                paths,
+                LevelType.User,
+                deleteSource: false,
+                onProgress: (index, total, path) =>
+                {
+                    SetStatus($"Importing {index}/{total}: {Path.GetFileName(path)}...");
+                });
             if (installed == null || installed.Count == 0)
             {
                 SetStatus(paths.Count == 1
@@ -1007,6 +1109,7 @@ public class CytoidLabMenuController : MonoBehaviour
             }
             // Remember the newly imported level so the list can select it after refresh.
             pendingSelectLevelId = ResolveLevelIdFromInstalledPaths(installed);
+            SetStatus($"Loading {installed.Count} imported level(s)...");
             // Ensure the newly installed level is loaded into LoadedLocalLevels.
             await Context.LevelManager.LoadLevelsOfType(LevelType.User);
             await RefreshLevelList();
@@ -1016,7 +1119,7 @@ public class CytoidLabMenuController : MonoBehaviour
             }
             else if (installed.Count == paths.Count)
             {
-                SetStatus($"Installed {installed.Count} levels.");
+                SetStatus($"Installed {installed.Count}/{paths.Count} levels.");
             }
             else
             {

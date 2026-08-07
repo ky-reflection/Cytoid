@@ -63,7 +63,10 @@ public class CytoidLabViewportOverlay : MonoBehaviour
         panelRect.pivot = new Vector2(1, 1);
         panelRect.anchoredPosition = new Vector2(-16, -64);
         panelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-        panel.AddComponent<Image>().color = PanelBg;
+        var panelImage = panel.AddComponent<Image>();
+        panelImage.color = Color.white;
+        CytoidLabUi.ApplyRoundedCorners(panelImage, CytoidLabUi.SoftRadius);
+        panelImage.color = PanelBg;
 
         var title = CreateChild("Title", panel.transform);
         var titleRect = title.GetComponent<RectTransform>();
@@ -136,6 +139,8 @@ public class CytoidLabViewportOverlay : MonoBehaviour
 
         RefreshSelection();
         CytoidLabUiInput.ClearUiSelection();
+        Canvas.ForceUpdateCanvases();
+        CytoidLabUi.RefreshRoundedCorners();
     }
 
     private void Update()
@@ -220,10 +225,12 @@ public class CytoidLabViewportOverlay : MonoBehaviour
     {
         var go = CreateChild("PresetButton", parent);
         var image = go.AddComponent<Image>();
-        image.color = NormalColor;
+        image.color = Color.white;
+        CytoidLabUi.ApplyRoundedCorners(image, CytoidLabUi.SoftRadius);
         var btn = go.AddComponent<Button>();
         btn.onClick.AddListener(onClick);
         CytoidLabUiInput.DisableKeyboardNavigation(btn);
+        CytoidLabUi.ApplyRoundedButtonColors(btn, NormalColor);
         go.AddComponent<LayoutElement>().flexibleWidth = 1;
 
         var textGo = CreateChild("Label", go.transform);

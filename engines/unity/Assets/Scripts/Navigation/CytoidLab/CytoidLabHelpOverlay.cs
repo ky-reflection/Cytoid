@@ -14,7 +14,6 @@ public class CytoidLabHelpOverlay : MonoBehaviour
     private const float PanelPadding = 20f;
 
     private static readonly Color PanelBg = new Color(0.11f, 0.13f, 0.19f, 0.98f);
-    private static readonly Color PanelBorder = new Color(0.35f, 0.5f, 0.75f, 0.35f);
     private static readonly Color BackdropColor = new Color(0, 0, 0, 0.72f);
     private static readonly Color HeadingColor = new Color(0.72f, 0.84f, 1f);
     private static readonly Color BodyColor = new Color(0.9f, 0.91f, 0.94f);
@@ -57,23 +56,9 @@ public class CytoidLabHelpOverlay : MonoBehaviour
         panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.5f, 0.5f);
         panelRect.pivot = new Vector2(0.5f, 0.5f);
         panelRect.sizeDelta = new Vector2(panelW, panelH);
-        panel.AddComponent<Image>().color = PanelBg;
-
-        var border = CreateChild("Border", panel.transform);
-        StretchFull(border.GetComponent<RectTransform>());
-        var borderImg = border.AddComponent<Image>();
-        borderImg.color = Color.clear;
-        borderImg.type = Image.Type.Sliced;
-        // 1px inset outline via Outline component is overkill; use a subtle top rule instead.
-
-        var accent = CreateChild("Accent", panel.transform);
-        var accentRect = accent.GetComponent<RectTransform>();
-        accentRect.anchorMin = new Vector2(0, 1);
-        accentRect.anchorMax = new Vector2(1, 1);
-        accentRect.pivot = new Vector2(0.5f, 1);
-        accentRect.anchoredPosition = Vector2.zero;
-        accentRect.sizeDelta = new Vector2(0, 2);
-        accent.AddComponent<Image>().color = PanelBorder;
+        var panelImage = panel.AddComponent<Image>();
+        panelImage.color = PanelBg;
+        CytoidLabUi.ApplyRoundedCorners(panelImage, CytoidLabUi.SoftRadius);
 
         // Header
         var header = CreateChild("Header", panel.transform);
@@ -100,21 +85,13 @@ public class CytoidLabHelpOverlay : MonoBehaviour
 
         CreateHeaderButton(header.transform, font, "Close", Close);
 
-        var rule = CreateChild("Rule", panel.transform);
-        var ruleRect = rule.GetComponent<RectTransform>();
-        ruleRect.anchorMin = new Vector2(0, 1);
-        ruleRect.anchorMax = new Vector2(1, 1);
-        ruleRect.offsetMin = new Vector2(PanelPadding, -HeaderHeight - 1);
-        ruleRect.offsetMax = new Vector2(-PanelPadding, -HeaderHeight);
-        rule.AddComponent<Image>().color = new Color(1, 1, 1, 0.08f);
-
         // Scroll area
         var scrollRoot = CreateChild("Scroll", panel.transform);
         var scrollRect = scrollRoot.GetComponent<RectTransform>();
         scrollRect.anchorMin = Vector2.zero;
         scrollRect.anchorMax = Vector2.one;
         scrollRect.offsetMin = new Vector2(PanelPadding, PanelPadding);
-        scrollRect.offsetMax = new Vector2(-PanelPadding, -(HeaderHeight + 8));
+        scrollRect.offsetMax = new Vector2(-PanelPadding, -(HeaderHeight + 4));
 
         var scroll = scrollRoot.AddComponent<ScrollRect>();
         scroll.horizontal = false;
@@ -170,6 +147,8 @@ public class CytoidLabHelpOverlay : MonoBehaviour
 
         CytoidLabUiInput.ClearUiSelection();
         LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
+        Canvas.ForceUpdateCanvases();
+        CytoidLabUi.RefreshRoundedCorners();
     }
 
     private void Update()
@@ -196,12 +175,10 @@ public class CytoidLabHelpOverlay : MonoBehaviour
         rect.sizeDelta = new Vector2(76, 32);
 
         var image = go.AddComponent<Image>();
-        image.color = new Color(0.22f, 0.32f, 0.5f);
+        image.color = Color.white;
+        CytoidLabUi.ApplyRoundedCorners(image, CytoidLabUi.ButtonRadius);
         var btn = go.AddComponent<Button>();
-        var colors = btn.colors;
-        colors.highlightedColor = new Color(0.3f, 0.45f, 0.65f);
-        colors.pressedColor = new Color(0.18f, 0.26f, 0.42f);
-        btn.colors = colors;
+        CytoidLabUi.ApplyRoundedButtonColors(btn);
         btn.onClick.AddListener(onClick);
         CytoidLabUiInput.DisableKeyboardNavigation(btn);
 

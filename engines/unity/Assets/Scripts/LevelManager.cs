@@ -232,13 +232,22 @@ public class LevelManager
 
     /// <summary>
     /// Installs arbitrary .cytoidlevel packages (Lab multi-select import keeps sources when deleteSource is false).
+    /// <paramref name="onProgress"/> receives 1-based index, total count, and package path.
     /// </summary>
-    public async UniTask<List<string>> InstallLevels(List<string> packagePaths, LevelType type, bool deleteSource = true)
+    public async UniTask<List<string>> InstallLevels(
+        List<string> packagePaths,
+        LevelType type,
+        bool deleteSource = true,
+        Action<int, int, string> onProgress = null)
     {
         var loadedLevelJsonFiles = new List<string>();
         var index = 1;
         foreach (var levelFile in packagePaths)
         {
+            onProgress?.Invoke(index, packagePaths.Count, levelFile);
+            // Let UI status text paint between packages.
+            await UniTask.Yield();
+
             var tempFolder = Path.Combine(type.GetDataPath(), Guid.NewGuid().ToString());
             if (await UnpackLevelPackage(levelFile, tempFolder))
             {
@@ -247,6 +256,7 @@ public class LevelManager
                 {
                     Debug.LogError($"level.json not found in {levelFile}");
                     Directory.Delete(tempFolder, true);
+                    index++;
                     continue;
                 }
 
@@ -255,6 +265,7 @@ public class LevelManager
                 {
                     Debug.LogError($"Invalid level.json in {levelFile}");
                     Directory.Delete(tempFolder, true);
+                    index++;
                     continue;
                 }
 
@@ -262,6 +273,7 @@ public class LevelManager
                 {
                     Debug.LogError($"Invalid level id format in {levelFile}: {meta.id}");
                     Directory.Delete(tempFolder, true);
+                    index++;
                     continue;
                 }
 
