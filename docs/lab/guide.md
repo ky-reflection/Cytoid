@@ -111,6 +111,7 @@ Runtime code lives under `engines/unity/Assets/Scripts/Navigation/CytoidLab/`:
 |------|------|
 | `CytoidLabShell.cs` | Window sizing, overlay HUD lifecycle |
 | `CytoidLabMenuController.cs` | Level selection menu |
+| `CytoidLabPaths.cs` | Portable `./data` levels root, AppData migration, open-in-Explorer |
 | `CytoidLabHudController.cs` | In-game HUD, timeline slider, edge auto-hide |
 | `CytoidLabVersion.cs` | Release version constant |
 | `Game.CytoidLab.cs` | Timeline preview, resync, playfield restore at seek time |
@@ -119,6 +120,18 @@ Runtime code lives under `engines/unity/Assets/Scripts/Navigation/CytoidLab/`:
 | `*.CytoidLab.cs` | Other partial extensions (drag, storyboard, …) |
 
 IL2CPP stripping anchors: `engines/unity/Assets/link.xml` (`CytoidLab*` types).
+
+## Levels storage
+
+On Windows Lab **Player** builds, imported levels live next to `CytoidLab.exe`:
+
+`{installDir}/data/{levelId}/`
+
+This is the portable `./data` folder (not Unity's `Application.dataPath` / `CytoidLab_Data`). Use **Open data folder** in the menu (opens the selected level when one is selected).
+
+Levels previously under AppData (`%USERPROFILE%\AppData\LocalLow\TigerHix\Cytoid Lab\{levelId}\`) are **moved** into `./data` on first load when `./data` is writable. If the install directory is read-only, Lab keeps using AppData and logs a warning.
+
+Editor Play Mode still uses AppData so the Unity project tree is not polluted with `data/`.
 
 ## Logs
 

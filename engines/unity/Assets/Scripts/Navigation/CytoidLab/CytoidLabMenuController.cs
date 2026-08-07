@@ -170,8 +170,29 @@ public class CytoidLabMenuController : MonoBehaviour
             HintFontSize, TextAnchor.MiddleCenter);
         selectionHintText.GetComponent<LayoutElement>().preferredHeight = 22;
 
-        var importButton = CreateButton(root, "Import levels", () => ImportLevelFiles().Forget());
-        importButton.GetComponent<LayoutElement>().preferredHeight = ButtonHeight;
+        var importRow = CreateUiObject("ImportRow", root).transform;
+        var importRowLe = importRow.gameObject.AddComponent<LayoutElement>();
+        importRowLe.preferredHeight = ButtonHeight;
+        importRowLe.minHeight = ButtonHeight;
+        importRowLe.flexibleHeight = 0;
+        var importHlg = importRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+        importHlg.spacing = UiSpacing;
+        importHlg.childAlignment = TextAnchor.MiddleCenter;
+        importHlg.childControlWidth = true;
+        importHlg.childControlHeight = true;
+        importHlg.childForceExpandWidth = false;
+        importHlg.childForceExpandHeight = false;
+
+        // Keep Import at the previous fixed width (CreateButton default 400); square folder sits beside it.
+        var importButton = CreateButton(importRow, "Import levels", () => ImportLevelFiles().Forget());
+        var importLe = importButton.GetComponent<LayoutElement>();
+        importLe.preferredHeight = ButtonHeight;
+        importLe.minHeight = ButtonHeight;
+        importLe.preferredWidth = 400;
+        importLe.flexibleWidth = 0;
+        importLe.flexibleHeight = 0;
+
+        CreateFolderIconButton(importRow, OpenDataFolder);
 
         statusText = CreateText(root, "", StatusFontSize, TextAnchor.MiddleLeft);
         statusText.color = new Color(1, 0.8f, 0.4f);
@@ -484,6 +505,57 @@ public class CytoidLabMenuController : MonoBehaviour
         return btn;
     }
 
+    private Button CreateFolderIconButton(Transform parent, UnityEngine.Events.UnityAction onClick)
+    {
+        const float size = ButtonHeight;
+
+        var go = CreateUiObject("OpenDataButton", parent);
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(size, size);
+
+        var image = go.AddComponent<Image>();
+        image.color = new Color(0.25f, 0.35f, 0.55f);
+
+        var btn = go.AddComponent<Button>();
+        btn.targetGraphic = image;
+        btn.onClick.AddListener(onClick);
+        CytoidLabUiInput.DisableKeyboardNavigation(btn);
+
+        var le = go.AddComponent<LayoutElement>();
+        le.preferredWidth = size;
+        le.preferredHeight = size;
+        le.minWidth = size;
+        le.minHeight = size;
+        le.flexibleWidth = 0;
+        le.flexibleHeight = 0;
+
+        // Simple folder glyph (tab + body) so we don't depend on emoji glyphs in Nunito.
+        var tab = CreateUiObject("FolderTab", go.transform);
+        var tabRect = tab.GetComponent<RectTransform>();
+        tabRect.anchorMin = new Vector2(0.18f, 0.62f);
+        tabRect.anchorMax = new Vector2(0.52f, 0.80f);
+        tabRect.offsetMin = Vector2.zero;
+        tabRect.offsetMax = Vector2.zero;
+        var tabImage = tab.AddComponent<Image>();
+        tabImage.color = new Color(1f, 0.86f, 0.35f, 1f);
+        tabImage.raycastTarget = false;
+
+        var body = CreateUiObject("FolderBody", go.transform);
+        var bodyRect = body.GetComponent<RectTransform>();
+        bodyRect.anchorMin = new Vector2(0.16f, 0.20f);
+        bodyRect.anchorMax = new Vector2(0.84f, 0.64f);
+        bodyRect.offsetMin = Vector2.zero;
+        bodyRect.offsetMax = Vector2.zero;
+        var bodyImage = body.AddComponent<Image>();
+        bodyImage.color = new Color(1f, 0.78f, 0.2f, 1f);
+        bodyImage.raycastTarget = false;
+
+        return btn;
+    }
+
     private void SetStatus(string message)
     {
         if (statusText != null) statusText.text = message;
@@ -510,6 +582,7 @@ public class CytoidLabMenuController : MonoBehaviour
         if (selectedLevel != null && !LevelHasChart(selectedLevel, difficulty)) return;
 
         selectedDifficulty = difficulty;
+        PersistSelection();
         UpdateDifficultyButtons();
         UpdateSelectionHint();
     }
@@ -592,7 +665,7 @@ public class CytoidLabMenuController : MonoBehaviour
             rowImage.color = isSelected ? new Color(0.2f, 0.35f, 0.55f, 1f) : new Color(0.12f, 0.12f, 0.16f, 1f);
         }
 
-        if (!LevelHasChart(level, selectedDifficulty))
+        if (selectedDifficulty == null || !LevelHasChart(level, selectedDifficulty))
         {
             foreach (var diff in new[] { Difficulty.Hard, Difficulty.Extreme, Difficulty.Easy })
             {
@@ -602,8 +675,61 @@ public class CytoidLabMenuController : MonoBehaviour
             }
         }
 
+        PersistSelection();
         UpdateDifficultyButtons();
         UpdateSelectionHint();
+    }
+
+    private void PersistSelection()
+    {
+        CytoidLabPreferences.SaveSelectedLevel(
+            selectedLevel?.Meta?.id,
+            selectedDifficulty?.Id);
+    }
+
+    private void ApplyRestoredSelection(Dictionary<string, Level> loaded)
+    {
+        // Priority: pending import → in-memory selection → persisted prefs → first in list.
+        Level toSelect = null;
+
+        if (!string.IsNullOrEmpty(pendingSelectLevelId) &&
+            loaded.TryGetValue(pendingSelectLevelId, out var pendingLevel))
+        {
+            toSelect = pendingLevel;
+            pendingSelectLevelId = null;
+        }
+        else if (selectedLevel != null &&
+                 !string.IsNullOrEmpty(selectedLevel.Meta?.id) &&
+                 loaded.TryGetValue(selectedLevel.Meta.id, out var currentLevel))
+        {
+            toSelect = currentLevel;
+        }
+        else if (CytoidLabPreferences.TryGetSelectedLevel(out var savedLevelId, out var savedDifficultyId) &&
+                 loaded.TryGetValue(savedLevelId, out var savedLevel))
+        {
+            toSelect = savedLevel;
+            if (!string.IsNullOrEmpty(savedDifficultyId))
+            {
+                selectedDifficulty = Difficulty.Parse(savedDifficultyId);
+            }
+        }
+        else
+        {
+            toSelect = loaded.Values.OrderBy(l => l.Meta.title ?? l.Meta.id).FirstOrDefault();
+            pendingSelectLevelId = null;
+        }
+
+        if (toSelect != null)
+        {
+            SelectLevel(toSelect);
+        }
+        else
+        {
+            selectedLevel = null;
+            PersistSelection();
+            UpdateDifficultyButtons();
+            UpdateSelectionHint();
+        }
     }
 
     private void OnDeleteLevelClicked(Level level)
@@ -637,12 +763,14 @@ public class CytoidLabMenuController : MonoBehaviour
         {
             ClearLevelListUi();
 
+            var migrated = 0;
             try
             {
 #if UNITY_STANDALONE_WIN
                 // On PC the source .cytoidlevel files are kept wherever the user picked them,
                 // so scanning UserDataPath for packages is not enough. Load already-installed
                 // level folders directly.
+                migrated = CytoidLabPaths.MigrateLegacyLevelsIfNeeded();
                 await Context.LevelManager.LoadLevelsOfType(LevelType.User);
 #else
                 await Context.LevelManager.InstallUserCommunityLevels();
@@ -658,7 +786,14 @@ public class CytoidLabMenuController : MonoBehaviour
                 var empty = CreateButton(levelListRoot, "No levels installed. Use Import to add levels.", () => { });
                 empty.interactable = false;
                 empty.GetComponent<LayoutElement>().preferredHeight = LevelButtonHeight;
-                SetStatus("No levels installed.");
+                selectedLevel = null;
+                pendingSelectLevelId = null;
+                PersistSelection();
+                UpdateDifficultyButtons();
+                UpdateSelectionHint();
+                SetStatus(migrated > 0
+                    ? $"Migrated {migrated} level(s), but none loaded. See Player.log."
+                    : "No levels installed.");
                 return;
             }
 
@@ -667,22 +802,11 @@ public class CytoidLabMenuController : MonoBehaviour
                 CreateLevelListItem(level);
             }
 
-            SetStatus($"{Context.LevelManager.LoadedLocalLevels.Count} level(s) installed.");
+            SetStatus(migrated > 0
+                ? $"{Context.LevelManager.LoadedLocalLevels.Count} level(s) installed (migrated {migrated} from AppData)."
+                : $"{Context.LevelManager.LoadedLocalLevels.Count} level(s) installed.");
 
-            if (!string.IsNullOrEmpty(pendingSelectLevelId) &&
-                Context.LevelManager.LoadedLocalLevels.TryGetValue(pendingSelectLevelId, out var pendingLevel))
-            {
-                SelectLevel(pendingLevel);
-                pendingSelectLevelId = null;
-            }
-            else if (selectedLevel == null || !Context.LevelManager.LoadedLocalLevels.ContainsKey(selectedLevel.Meta.id))
-            {
-                SelectLevel(Context.LevelManager.LoadedLocalLevels.Values.First());
-            }
-            else
-            {
-                SelectLevel(selectedLevel);
-            }
+            ApplyRestoredSelection(Context.LevelManager.LoadedLocalLevels);
 
             RebuildLevelListScroll();
         }
@@ -831,6 +955,32 @@ public class CytoidLabMenuController : MonoBehaviour
         }
 
         await InstallLevelPackages(paths);
+    }
+
+    private void OpenDataFolder()
+    {
+        // Prefer the selected level folder when available so SB edits are one click away.
+        if (selectedLevel != null && !string.IsNullOrEmpty(selectedLevel.Path))
+        {
+            if (CytoidLabPaths.TryOpenSelectedLevelFolder(selectedLevel.Path))
+            {
+                SetStatus($"Opened {selectedLevel.Meta?.id ?? "level"} folder.");
+                return;
+            }
+        }
+
+        var root = CytoidLabPaths.GetUserLevelsRoot();
+        if (CytoidLabPaths.TryOpenDirectory(root))
+        {
+            var label = CytoidLabPaths.IsUsingPortableUserLevelsRoot()
+                ? "./data"
+                : "AppData levels folder";
+            SetStatus($"Opened {label}.");
+        }
+        else
+        {
+            SetStatus($"Failed to open folder: {root}");
+        }
     }
 
     private async UniTask InstallLevelPackages(List<string> paths)

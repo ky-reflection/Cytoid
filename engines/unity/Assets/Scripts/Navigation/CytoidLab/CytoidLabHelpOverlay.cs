@@ -297,7 +297,9 @@ public class CytoidLabHelpOverlay : MonoBehaviour
     private static string GetTipsText()
     {
         return "Import — pick one or more .cytoidlevel / .zip files, or drag packages onto CytoidLab.exe.\n"
-               + "Levels are stored under Unity persistent data (see Player.log folder).\n"
+               + "Levels live in ./data next to CytoidLab.exe. The folder button opens the selected level (or ./data).\n"
+               + "Older AppData installs migrate into ./data automatically on load.\n"
+               + "Player.log stays under AppData LocalLow\\TigerHix\\Cytoid Lab\\.\n"
                + $"Version: {CytoidLabVersion.DisplayName}";
     }
 

@@ -137,7 +137,7 @@ public static class CytoidLabUpdater
     {
         if (!IsSupported || info == null || string.IsNullOrEmpty(info.ZipUrl)) return false;
 
-        var installDir = GetInstallDirectory();
+        var installDir = CytoidLabPaths.GetInstallDirectory();
         if (string.IsNullOrEmpty(installDir) || !Directory.Exists(installDir))
         {
             onStatus?.Invoke("Update failed: install directory not found.");
@@ -236,20 +236,6 @@ public static class CytoidLabUpdater
     {
         PlayerPrefs.SetString(LastCheckUtcKey, DateTime.UtcNow.ToString("o"));
         PlayerPrefs.Save();
-    }
-
-    private static string GetInstallDirectory()
-    {
-        try
-        {
-            var dataPath = Application.dataPath;
-            if (string.IsNullOrEmpty(dataPath)) return null;
-            return Directory.GetParent(dataPath)?.FullName;
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private static bool TryParseVersion(string version, out int major, out int minor, out int patch)

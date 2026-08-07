@@ -50,7 +50,8 @@ public static class LevelTypeExtensions {
         switch (type)
         {
             case LevelType.User:
-                return Application.persistentDataPath;
+                // Lab Windows Player uses ./data next to the exe when writable; otherwise AppData.
+                return CytoidLabPaths.GetUserLevelsRoot();
             case LevelType.BuiltIn:
                 return Path.Combine(Application.temporaryCachePath, "Built In");
             case LevelType.Temp:

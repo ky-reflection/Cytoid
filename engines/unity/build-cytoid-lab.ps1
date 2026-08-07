@@ -88,7 +88,14 @@ try {
             Write-Info "SkipClean: keeping previous build output (incremental IL2CPP friendly)."
         }
 
+        $script:PreservedDataDir = $null
+        $dataDir = Join-Path $OutputPath "data"
         if (-not $SkipClean -and (Test-Path $OutputPath)) {
+            if (Test-Path $dataDir) {
+                $script:PreservedDataDir = Join-Path ([System.IO.Path]::GetTempPath()) ("CytoidLab-data-" + [guid]::NewGuid().ToString("N"))
+                Write-Info "Preserving ./data across clean: $script:PreservedDataDir"
+                Move-Item -LiteralPath $dataDir -Destination $script:PreservedDataDir
+            }
             Write-Info "Cleaning previous build output: $OutputPath"
             Remove-Item -Recurse -Force $OutputPath
         }
@@ -175,6 +182,16 @@ $logTail
             $_.Name -like "*BackUpThisFolder_ButDontShipItWithYourGame*"
         } | Remove-Item -Recurse -Force
 
+        if ($script:PreservedDataDir -and (Test-Path -LiteralPath $script:PreservedDataDir)) {
+            $restoreTarget = Join-Path $OutputPath "data"
+            if (Test-Path -LiteralPath $restoreTarget) {
+                Remove-Item -LiteralPath $restoreTarget -Recurse -Force
+            }
+            Move-Item -LiteralPath $script:PreservedDataDir -Destination $restoreTarget
+            $script:PreservedDataDir = $null
+            Write-Info "Restored ./data into build output."
+        }
+
         if (-not $KeepLog -and (Test-Path $logFile)) {
             Remove-Item -Force $logFile
         }
@@ -186,8 +203,21 @@ $logTail
             if (Test-Path $zipPath) {
                 Remove-Item -Force $zipPath
             }
-            Write-Info "Packaging $zipPath ..."
-            Compress-Archive -Path "$OutputPath\*" -DestinationPath $zipPath
+            Write-Info "Packaging $zipPath (excluding ./data) ..."
+            $stageDir = Join-Path ([System.IO.Path]::GetTempPath()) ("CytoidLab-zip-" + [guid]::NewGuid().ToString("N"))
+            try {
+                New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+                Get-ChildItem -LiteralPath $OutputPath -Force | Where-Object {
+                    $_.Name -ne 'data'
+                } | ForEach-Object {
+                    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $stageDir $_.Name) -Recurse -Force
+                }
+                Compress-Archive -Path "$stageDir\*" -DestinationPath $zipPath
+            } finally {
+                if (Test-Path -LiteralPath $stageDir) {
+                    Remove-Item -LiteralPath $stageDir -Recurse -Force
+                }
+            }
             Write-Info "Package ready: $zipPath"
         }
     }
@@ -201,6 +231,18 @@ $logTail
     }
 }
 catch {
+    if ($script:PreservedDataDir -and (Test-Path -LiteralPath $script:PreservedDataDir)) {
+        try {
+            $fallback = Join-Path $OutputPath "data"
+            New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
+            if (-not (Test-Path -LiteralPath $fallback)) {
+                Move-Item -LiteralPath $script:PreservedDataDir -Destination $fallback
+                Write-Info "Build failed; restored ./data to $fallback"
+            }
+        } catch {
+            Write-Info "Build failed; preserved ./data left at: $script:PreservedDataDir"
+        }
+    }
     $totalStopwatch.Stop()
     Write-Error $_
     if ($script:BuildTimings.Count -gt 0) {
