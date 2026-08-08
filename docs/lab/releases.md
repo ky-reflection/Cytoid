@@ -6,31 +6,27 @@ Build artifact: `.\engines\unity\build-cytoid-lab.ps1 -Package -KeepLog` → `en
 
 ---
 
-## Unreleased (next after v0.2.0)
+## Unreleased (next after v0.2.1)
+
+_(empty)_
+
+---
+
+## v0.2.1
+
+**Tag:** `cytoid-lab-v0.2.1` · **Title:** Cytoid Lab v0.2.1
 
 ### English
 
-#### What's new
-
-- **Portable levels folder** — imported charts live in `./data/{levelId}/` next to `CytoidLab.exe` (easy storyboard edits)
-- **AppData migration** — on first load, existing AppData level folders with `level.json` are moved into `./data` (skips ids already present under `./data`)
-- **Open data folder** — folder icon beside Import opens the selected level folder, or `./data` when none is selected
-- **Remember selection** — last level/difficulty restored after play and across launches; import selects the new level; otherwise defaults to the first list entry
-- **Rounded Lab UI** — menu / help use Cytoid `RoundedCorners` radii (SoftButton 16 / button 12)
-
-Player log remains: `%USERPROFILE%\AppData\LocalLow\TigerHix\Cytoid Lab\Player.log`
+- Portable `./data` next to the exe (migrates old AppData levels)
+- Open folder button; remembers level/difficulty
+- Rounded Lab UI; import progress in status
 
 ### 中文
 
-#### 更新内容
-
-- **便携谱面目录** — 导入的谱面在 `CytoidLab.exe` 同级 `./data/{levelId}/`，方便改 storyboard
-- **AppData 迁移** — 首次加载时把旧 AppData 下含 `level.json` 的谱面目录移入 `./data`（`./data` 已有同 id 则跳过）
-- **打开数据文件夹** — Import 旁文件夹按钮打开当前选中谱面目录，未选中时打开 `./data`
-- **记住选中** — 播放后与跨启动恢复上次关卡/难度；导入后选中新谱；否则默认列表第一项
-- **圆角 UI** — 菜单 / Help 使用 Cytoid `RoundedCorners` 圆角（SoftButton 16 / 按钮 12）
-
-Player.log 仍在：`%USERPROFILE%\AppData\LocalLow\TigerHix\Cytoid Lab\Player.log`
+- 便携 `./data`（自动迁移旧 AppData 谱面）
+- 打开文件夹；记住关卡/难度
+- 圆角 UI；导入进度显示在状态栏
 
 ---
 
