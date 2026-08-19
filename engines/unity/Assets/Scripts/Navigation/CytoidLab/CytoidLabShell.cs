@@ -208,6 +208,23 @@ public class CytoidLabShell : MonoBehaviour
         UnityEngine.Screen.SetResolution(CurrentWindowWidth, CurrentWindowHeight, FullScreenMode.Windowed);
     }
 
+    public static void ApplyPersistedDisplayMode()
+    {
+        if (!IsActive) return;
+
+        if (CytoidLabPreferences.Fullscreen)
+        {
+            var res = UnityEngine.Screen.currentResolution;
+            UnityEngine.Screen.SetResolution(res.width, res.height, FullScreenMode.FullScreenWindow);
+            return;
+        }
+
+        if (UnityEngine.Screen.fullScreen)
+        {
+            RestoreWindowedSize();
+        }
+    }
+
     /// <summary>
     /// Adopts the current Screen size as the tracked window size without resizing.
     /// </summary>
@@ -273,6 +290,8 @@ public class CytoidLabShell : MonoBehaviour
         {
             CaptureWindowSizeFromScreen();
         }
+
+        ApplyPersistedDisplayMode();
     }
 
     private void OnDestroy()

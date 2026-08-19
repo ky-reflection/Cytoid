@@ -616,8 +616,9 @@ public class CytoidLabHudController : MonoBehaviour
             game.State.Mods.Add(Mod.Auto);
         }
 
+        CytoidLabPreferences.Auto = game.State.Mods.Contains(Mod.Auto);
         UpdateAutoButton();
-        SetStatus(game.State.Mods.Contains(Mod.Auto) ? "Auto enabled." : "Auto disabled.");
+        SetStatus(CytoidLabPreferences.Auto ? "Auto enabled." : "Auto disabled.");
     }
 
     private void UpdateAutoButton()
@@ -636,6 +637,7 @@ public class CytoidLabHudController : MonoBehaviour
     {
         var wasEnabled = Context.Player.Settings.HitSound != "none";
         Context.Player.Settings.HitSound = wasEnabled ? "none" : "click1";
+        CytoidLabPreferences.HitSoundEnabled = !wasEnabled;
         if (!wasEnabled)
         {
             await LoadHitSoundAsync();
@@ -677,6 +679,7 @@ public class CytoidLabHudController : MonoBehaviour
 
         var enabled = !Context.Player.Settings.DisplayNoteIds;
         Context.Player.Settings.DisplayNoteIds = enabled;
+        CytoidLabPreferences.DisplayNoteIds = enabled;
         game.Config.DisplayNoteIds = enabled;
         RefreshSpawnedNoteIdLabels();
         UpdateNoteIdsButton();
@@ -700,7 +703,7 @@ public class CytoidLabHudController : MonoBehaviour
     {
         if (noteIdsButton == null) return;
 
-        var enabled = Context.Player.Settings.DisplayNoteIds;
+        var enabled = CytoidLabPreferences.DisplayNoteIds;
         var text = noteIdsButton.GetComponentInChildren<Text>();
         if (text != null) text.text = enabled ? "IDs: On" : "IDs: Off";
         var colors = noteIdsButton.colors;
@@ -710,7 +713,8 @@ public class CytoidLabHudController : MonoBehaviour
 
     private void ToggleSkipEnd()
     {
-        var enabled = !Context.Player.Settings.SkipMusicOnCompletion;
+        var enabled = !CytoidLabPreferences.SkipMusicOnCompletion;
+        CytoidLabPreferences.SkipMusicOnCompletion = enabled;
         Context.Player.Settings.SkipMusicOnCompletion = enabled;
         UpdateSkipEndButton();
         SetStatus(enabled ? "Skip end enabled." : "Skip end disabled — music will play out.");
@@ -720,7 +724,7 @@ public class CytoidLabHudController : MonoBehaviour
     {
         if (skipEndButton == null) return;
 
-        var enabled = Context.Player.Settings.SkipMusicOnCompletion;
+        var enabled = CytoidLabPreferences.SkipMusicOnCompletion;
         var text = skipEndButton.GetComponentInChildren<Text>();
         if (text != null) text.text = enabled ? "End: On" : "End: Off";
         var colors = skipEndButton.colors;
@@ -766,6 +770,7 @@ public class CytoidLabHudController : MonoBehaviour
 
     private void EnterFullscreen()
     {
+        CytoidLabPreferences.Fullscreen = true;
         var res = UnityEngine.Screen.currentResolution;
         UnityEngine.Screen.SetResolution(res.width, res.height, FullScreenMode.FullScreenWindow);
         UpdateFullscreenButtonLabel();
@@ -773,6 +778,7 @@ public class CytoidLabHudController : MonoBehaviour
 
     private void ExitFullscreen()
     {
+        CytoidLabPreferences.Fullscreen = false;
         CytoidLabShell.RestoreWindowedSize();
         UpdateFullscreenButtonLabel();
     }

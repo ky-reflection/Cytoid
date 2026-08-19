@@ -96,6 +96,7 @@ public class CytoidLabMenuController : MonoBehaviour
         {
             CytoidLabShell.CaptureWindowSizeFromScreen();
         }
+        CytoidLabShell.ApplyPersistedDisplayMode();
         UpdateViewportCornerButton();
         ShowGameErrorIfAny();
         await RefreshLevelList();
@@ -316,7 +317,6 @@ public class CytoidLabMenuController : MonoBehaviour
 
     private static void ApplyLabMenuDefaults()
     {
-        Context.Player.Settings.HitSound = "none";
         Context.Player.Settings.RestrictPlayAreaAspectRatio = true;
         CytoidLabPreferences.LoadInto(Context.Player.Settings);
     }
@@ -1037,7 +1037,7 @@ public class CytoidLabMenuController : MonoBehaviour
         SetStatus("Starting game...");
         Context.GameErrorState = null;
         CytoidLabShell.CaptureWindowSizeFromScreen();
-        GameLaunchBridge.StartDebugGame(selectedLevel, selectedDifficulty, new List<Mod> { Mod.Auto });
+        GameLaunchBridge.StartDebugGame(selectedLevel, selectedDifficulty, CytoidLabPreferences.CreateLaunchMods());
     }
 
     private async UniTask ImportLevelFiles()
