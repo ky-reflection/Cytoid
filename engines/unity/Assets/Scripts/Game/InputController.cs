@@ -305,6 +305,8 @@ public class InputController : MonoBehaviour
             }
             else if (!holdNote.DoesCollide(pos)) // If holding elsewhere
             {
+                // Release only — HoldNote judges on the following OnGameUpdate
+                // so swipe-off includes this music frame (input runs at -100).
                 holdNote.UpdateFinger(finger.Index, false);
                 HoldingNotes.Remove(finger.Index);
             }
@@ -316,6 +318,7 @@ public class InputController : MonoBehaviour
         if (HoldingNotes.ContainsKey(finger.Index))
         {
             var holdNote = HoldingNotes[finger.Index];
+            // See OnFingerUpdate slide-off: judgment is deferred to OnGameUpdate.
             holdNote.UpdateFinger(finger.Index, false);
             HoldingNotes.Remove(finger.Index);
         }

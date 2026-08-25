@@ -10,7 +10,12 @@ public class HoldNote : Note
     public List<int> HoldingFingers { get; } = new List<int>(2);
 
     private bool playedHitSoundAtBegin;
-    
+    /// <summary>
+    /// Finger left after the hold start. Judgment waits for <see cref="OnGameUpdate"/>
+    /// so HeldDuration includes the current music frame (input runs first).
+    /// </summary>
+    private bool pendingReleaseJudgment;
+
     public bool IsHolding => HoldingFingers.Count > 0;
 
     protected override NoteRenderer CreateRenderer()
@@ -29,49 +34,23 @@ public class HoldNote : Note
         HoldProgress = default;
         HoldingFingers.Clear();
         playedHitSoundAtBegin = false;
+        pendingReleaseJudgment = false;
         base.Collect();
     }
 
     protected override void OnGameUpdate(Game _)
     {
+        // Grade a same-frame release before Note.ShouldMiss can treat it as a timeout.
+        TickHoldJudgment();
         base.OnGameUpdate(_);
-        if (IsHolding)
-        {
-            if (Game.Time >= Model.start_time + JudgmentOffset)
-            {
-                HeldDuration = Game.Time - Mathf.Max(Model.start_time + JudgmentOffset, HoldingStartTime);
-            }
-            else
-            {
-                HeldDuration = 0;
-            }
-            HoldProgress = (Game.Time - (Model.start_time + JudgmentOffset)) / Model.Duration;
-            
-            if (!playedHitSoundAtBegin && HoldProgress >= 0 && Context.Player.Settings.HoldHitSoundTiming.Let(it => it == HoldHitSoundTiming.Begin || it == HoldHitSoundTiming.Both))
-            {
-                playedHitSoundAtBegin = true;
-                PlayHitSound();
-            }
-
-            // Already completed?
-            if (Game.Time >= Model.end_time + JudgmentOffset)
-            {
-                HoldingFingers.Clear();
-                if (Game.Time > Model.start_time + JudgmentOffset && Game.State.IsPlaying)
-                {
-                    Clear(IsAutoEnabled() ? NoteGrade.Perfect : CalculateGrade());
-                }
-            }
-        }
-        else
-        {
-            HoldProgress = 0;
-        }
+        // Autoplay may bind in Note.OnGameUpdate; complete the hold on this tick.
+        TickHoldJudgment();
     }
 
     public override bool ShouldMiss()
     {
-        return !IsHolding && base.ShouldMiss();
+        if (IsHolding || pendingReleaseJudgment) return false;
+        return base.ShouldMiss();
     }
     
     public override bool OnTouch(Vector2 screenPos)
@@ -91,6 +70,7 @@ public class HoldNote : Note
             if (!previouslyHolding)
             {
                 HoldingStartTime = Game.Time;
+                pendingReleaseJudgment = false;
             }
         }
         else
@@ -98,12 +78,14 @@ public class HoldNote : Note
             HoldingFingers.Remove(finger);
         }
 
-        if (HoldingFingers.Count == 0 && Game.Time > Model.start_time + JudgmentOffset)
+        // Do not Clear here. GameTouchInput (-100) runs before Game.Update
+        // advances Time / ticks this hold. Immediate release judgment uses a
+        // one-frame-stale HeldDuration — swipe-through on a short hold Misses
+        // while a tap that stays for OnGameUpdate completes.
+        if (previouslyHolding && HoldingFingers.Count == 0 &&
+            HoldNoteTiming.ShouldJudgeRelease(Game.Time, Model.start_time, JudgmentOffset, Game.State.IsPlaying))
         {
-            if (Game.Time > Model.start_time + JudgmentOffset && Game.State.IsPlaying)
-            {
-                Clear(IsAutoEnabled() ? NoteGrade.Perfect : CalculateGrade());
-            }
+            pendingReleaseJudgment = true;
         }
     }
 
@@ -144,5 +126,50 @@ public class HoldNote : Note
     public override bool IsAutoEnabled()
     {
         return base.IsAutoEnabled() || Game.State.Mods.Contains(Mod.AutoHold);
+    }
+
+    private void TickHoldJudgment()
+    {
+        if (IsCleared) return;
+
+        if (IsHolding)
+        {
+            SyncHoldProgress();
+
+            if (!playedHitSoundAtBegin && HoldProgress >= 0 && Context.Player.Settings.HoldHitSoundTiming.Let(it => it == HoldHitSoundTiming.Begin || it == HoldHitSoundTiming.Both))
+            {
+                playedHitSoundAtBegin = true;
+                PlayHitSound();
+            }
+
+            if (HoldNoteTiming.ShouldCompleteWhileHolding(Game.Time, Model.start_time, Model.end_time, JudgmentOffset) &&
+                Game.State.IsPlaying)
+            {
+                HoldingFingers.Clear();
+                pendingReleaseJudgment = false;
+                Clear(IsAutoEnabled() ? NoteGrade.Perfect : CalculateGrade());
+            }
+        }
+        else if (pendingReleaseJudgment)
+        {
+            SyncHoldProgress();
+            pendingReleaseJudgment = false;
+            if (HoldNoteTiming.ShouldJudgeRelease(Game.Time, Model.start_time, JudgmentOffset, Game.State.IsPlaying))
+            {
+                Clear(IsAutoEnabled() ? NoteGrade.Perfect : CalculateGrade());
+            }
+        }
+        else
+        {
+            HoldProgress = 0;
+        }
+    }
+
+    private void SyncHoldProgress()
+    {
+        HeldDuration = HoldNoteTiming.ComputeHeldDuration(
+            Game.Time, Model.start_time, JudgmentOffset, HoldingStartTime);
+        HoldProgress = HoldNoteTiming.ComputeHoldProgress(
+            Game.Time, Model.start_time, Model.end_time, JudgmentOffset);
     }
 }
