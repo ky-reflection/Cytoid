@@ -49,16 +49,23 @@ public class HoldNoteTimingTests
     }
 
     [Test]
-    public void ShortHold_CompletesOnTheUpdateAfterBind()
+    public void ZeroTick_CompletesAtExactStart_WhileStillHolding()
     {
-        // Ultra-short hold: 40ms. Input binds at last frame's Time (== start).
-        // Game.Update then advances one 16ms music frame — that tick must complete
-        // the hold while still holding (tap or swipe-through).
+        // 0-tick hold: end == start. Swipe-on-and-stay must complete at Time == start,
+        // not wait for a later frame and not drop the bind without judging.
+        Assert.IsFalse(HoldNoteTiming.ShouldCompleteWhileHolding(Start - 0.001f, Start, Start, Offset));
+        Assert.IsTrue(HoldNoteTiming.ShouldCompleteWhileHolding(Start, Start, Start, Offset));
+        Assert.IsTrue(HoldNoteTiming.ShouldCompleteWhileHolding(Start + 0.016f, Start, Start, Offset));
+    }
+
+    [Test]
+    public void ShortHold_CompletesWhenTimeReachesEnd_WhileStillHolding()
+    {
         const float end = Start + 0.040f;
         const float frame = 0.016f;
 
         Assert.IsFalse(HoldNoteTiming.ShouldCompleteWhileHolding(Start, Start, end, Offset));
-        Assert.IsTrue(HoldNoteTiming.ShouldCompleteWhileHolding(Start + frame, Start, end, Offset));
+        Assert.IsTrue(HoldNoteTiming.ShouldCompleteWhileHolding(end, Start, end, Offset));
         Assert.IsTrue(HoldNoteTiming.ShouldCompleteWhileHolding(Start + 3f * frame, Start, end, Offset));
     }
 

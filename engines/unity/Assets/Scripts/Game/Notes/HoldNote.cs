@@ -41,6 +41,7 @@ public class HoldNote : Note
     protected override void OnGameUpdate(Game _)
     {
         // Grade a same-frame release before Note.ShouldMiss can treat it as a timeout.
+        // 0-tick stay: complete on Time >= end while still holding (see HoldNoteTiming).
         TickHoldJudgment();
         base.OnGameUpdate(_);
         // Autoplay may bind in Note.OnGameUpdate; complete the hold on this tick.
@@ -80,8 +81,8 @@ public class HoldNote : Note
 
         // Do not Clear here. GameTouchInput (-100) runs before Game.Update
         // advances Time / ticks this hold. Immediate release judgment uses a
-        // one-frame-stale HeldDuration — swipe-through on a short hold Misses
-        // while a tap that stays for OnGameUpdate completes.
+        // stale HeldDuration. 0-tick / ultra-short holds are played by sliding
+        // onto the note and staying; completion is owned by OnGameUpdate.
         if (previouslyHolding && HoldingFingers.Count == 0 &&
             HoldNoteTiming.ShouldJudgeRelease(Game.Time, Model.start_time, JudgmentOffset, Game.State.IsPlaying))
         {

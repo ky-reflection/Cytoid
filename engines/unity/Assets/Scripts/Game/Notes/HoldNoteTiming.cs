@@ -35,13 +35,18 @@ public static class HoldNoteTiming
         return gameTime >= start ? 1f : 0f;
     }
 
+    /// <summary>
+    /// Complete while the finger is still down. For a 0-tick hold, end == start,
+    /// so <c>Time &gt;= end</c> is enough — do not also require <c>Time &gt; start</c>.
+    /// The old pair (clear fingers on <c>&gt;= end</c>, judge only on <c>&gt; start</c>)
+    /// dropped a stay-on-note bind at the exact start instant without judging.
+    /// </summary>
     public static bool ShouldCompleteWhileHolding(
         float gameTime,
         float startTime,
         float endTime,
         float judgmentOffset) =>
-        gameTime >= EffectiveEnd(endTime, judgmentOffset) &&
-        gameTime > EffectiveStart(startTime, judgmentOffset);
+        gameTime >= EffectiveEnd(endTime, judgmentOffset);
 
     /// <summary>
     /// FingerUp / slide-off after the hold start must wait for the next

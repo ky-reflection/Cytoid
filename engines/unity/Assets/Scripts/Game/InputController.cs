@@ -303,10 +303,19 @@ public class InputController : MonoBehaviour
             {
                 HoldingNotes.Remove(finger.Index);
             }
+            else if (!holdNote.IsHolding)
+            {
+                // 0-tick path used to clear HoldingFingers at Time >= end without
+                // Clear() when Time == start. Finger stays on the note; rebind.
+                if (holdNote.DoesCollide(pos))
+                    holdNote.UpdateFinger(finger.Index, true);
+                else
+                    HoldingNotes.Remove(finger.Index);
+            }
             else if (!holdNote.DoesCollide(pos)) // If holding elsewhere
             {
                 // Release only — HoldNote judges on the following OnGameUpdate
-                // so swipe-off includes this music frame (input runs at -100).
+                // so a leave after start includes this music frame (input at -100).
                 holdNote.UpdateFinger(finger.Index, false);
                 HoldingNotes.Remove(finger.Index);
             }
