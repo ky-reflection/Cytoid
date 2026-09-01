@@ -48,7 +48,6 @@ Bridge / mobile builds are unaffected (`GameEmbedMode.IsBridgeEmbedded` gates La
 - Compile SB writes `storyboard.compiled.json` beside the authoring file
 - Launch update check: red badge on **?**; Help links to the GitHub release
 - HUD hover matches the overlay bar plus padding
-- Drag-line degenerate segments hidden; aim from chart positions
 - Synced Cytoid/main #204–#208
 
 **v0.2.1**

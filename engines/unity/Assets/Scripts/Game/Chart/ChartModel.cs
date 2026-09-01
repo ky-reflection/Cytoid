@@ -142,24 +142,6 @@ public class ChartModel
             return pos;
         }
 
-        /// <summary>
-        /// Euler Z that aims a +Y-pivoted drag line / drag note from
-        /// <paramref name="from"/> toward <paramref name="to"/>.
-        /// Independent of whether either note is spawned.
-        /// </summary>
-        public static Vector3 RotationBetweenPositions(Vector3 from, Vector3 to)
-        {
-            if (from == to)
-                return Vector3.zero;
-            if (Math.Abs(from.y - to.y) < 0.000001)
-                return new Vector3(0, 0, from.x > to.x ? 90 : -90);
-            if (Math.Abs(from.x - to.x) < 0.000001)
-                return new Vector3(0, 0, from.y > to.y ? -180 : 0);
-            return new Vector3(0, 0, -(
-                Mathf.Atan((to.x - from.x) / (to.y - from.y)) / Mathf.PI * 180f +
-                (to.y > from.y ? 0 : 180)));
-        }
-
         public NoteOverride Override { get; } = new NoteOverride();
 
         public class NoteOverride

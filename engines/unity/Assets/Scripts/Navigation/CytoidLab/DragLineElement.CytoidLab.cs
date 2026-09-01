@@ -7,7 +7,6 @@ public partial class DragLineElement
         if (IsCollected || FromNoteModel.id <= 0) return;
 
         UpdateTransform();
-        ApplyRendererEnabled();
 
         var introDuration = FromNoteModel.nextdraglinestoptime - FromNoteModel.nextdraglinestarttime;
         if (introDuration > 0)
@@ -19,15 +18,7 @@ public partial class DragLineElement
             introRatio = time < FromNoteModel.nextdraglinestarttime ? 1.0f : 0.0f;
         }
 
-        var outroDuration = ToNoteModel.start_time - FromNoteModel.start_time;
-        if (outroDuration > 0)
-        {
-            outroRatio = (time - FromNoteModel.start_time) / outroDuration;
-        }
-        else
-        {
-            outroRatio = time < FromNoteModel.start_time ? 0.0f : 1.0f;
-        }
+        outroRatio = (time - FromNoteModel.start_time) / (ToNoteModel.start_time - FromNoteModel.start_time);
 
         if (introRatio > 0 && introRatio < 1)
         {

@@ -35,9 +35,7 @@ public partial class DragHeadNote
         fromNote = null;
         toNote = null;
 
-        transform.localEulerAngles = ChartModel.Note.RotationBetweenPositions(
-            FromNoteModel.CalculatePosition(Game.Chart),
-            ToNoteModel.CalculatePosition(Game.Chart));
+        transform.localEulerAngles = FromNoteModel.rotation;
 
         if (ToNoteModel == EndNoteModel && time >= ToNoteModel.start_time)
         {

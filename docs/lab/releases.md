@@ -23,7 +23,6 @@ Windows 10/11 x64 · Unity **6000.0.75f1** core
 - **Compile SB** — in-play button writes `storyboard.compiled.json` next to the source (does not overwrite authoring JSON; triggers omitted)
 - **Update check** — on launch, a red badge on **?** if a newer GitHub release exists; Help opens the release page (Lab does not self-install)
 - **HUD** — wider hover zone and a short hide delay so the top bar stays clickable
-- **Drag lines** — hide zero-length coincident segments; aim from chart positions (fixes the 5× upward bar)
 - **Core sync** — Cytoid/main #204–#208 (storyboard lifecycle, static page boundaries, TMP fonts, note next-position)
 
 ### 中文
@@ -33,7 +32,6 @@ Windows 10/11 x64 · Unity **6000.0.75f1** core
 - **Compile SB** — 游戏内写出 `storyboard.compiled.json`（不覆盖作者 JSON，不含 trigger）
 - **更新检查** — 启动时若有新 GitHub 版本，**?** 显示红点；帮助页跳转 Release（不自动安装）
 - **HUD** — 扩大悬停区并延迟收起，顶栏更好点
-- **Drag 线** — 隐藏零长度重合段；用谱面坐标瞄准（修复朝上 5 倍长条）
 - **内核同步** — Cytoid/main #204–#208（storyboard 生命周期、静态判定线、TMP 字体、note next-position）
 
 ---
