@@ -45,6 +45,7 @@ namespace Cytoid.Storyboard.Sprites
 
         public override void Dispose()
         {
+            if (IsDisposed) return;
             if (notePlaceholderTransform != null)
             {
                 UnityEngine.Object.Destroy(notePlaceholderTransform.gameObject);

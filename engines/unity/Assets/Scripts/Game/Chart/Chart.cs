@@ -184,6 +184,11 @@ public class Chart
                 speed /= 1.5f;
             }
 
+            // Final speed (mods × AR × experimental) must stay positive/finite for intro/scale.
+            const float minNoteSpeed = 1e-4f;
+            if (float.IsNaN(speed) || float.IsInfinity(speed) || speed <= minNoteSpeed)
+                speed = 1f;
+
             note.start_time = ConvertToTime((float) note.tick);
             note.end_time = ConvertToTime((float) (note.tick + note.hold_tick));
 
@@ -450,17 +455,9 @@ public class Chart
         return ConvertChartYToScreenY(percentage);
     }
 
-    public float GetPageBoundaryScreenY(int pageId, bool bottom)
-    {
-        pageId = Mathf.Clamp(pageId, 0, Model.page_list.Count - 1);
-        var page = Model.page_list[pageId];
-        PositionFunction.GetVisibleBand(page, out var low, out var high);
-        return PageDisplayYToScreenY(bottom ? low : high);
-    }
-
     /// <summary>
-    /// Full play-area top/bottom (always ±baseSize). Page-aware bands use
-    /// <see cref="GetPageBoundaryScreenY"/> instead.
+    /// Full play-area top/bottom (always ±baseSize), independent of the per-page
+    /// PositionFunction band.
     /// </summary>
     public float GetBoundaryPosition(bool bottom)
     {

@@ -24,6 +24,8 @@ namespace Cytoid.Storyboard.Videos
         private bool timelineSyncedBeforePlayback;
         private float videoTimelineStartTime = float.NaN;
         private bool ownsVideoObjects;
+        private bool hasEnded;
+        private VideoRenderer sharedPlaybackOwner;
 
         public override Transform Transform => RectTransform;
 
@@ -72,9 +74,12 @@ namespace Cytoid.Storyboard.Videos
 
         public override async UniTask Initialize()
         {
+            var version = BeginInitialize();
             var targetRenderer = GetTargetRenderer<VideoRenderer>();
             if (targetRenderer != null)
             {
+                ownsVideoObjects = false;
+                sharedPlaybackOwner = targetRenderer.sharedPlaybackOwner ?? targetRenderer;
                 VideoPlayer = targetRenderer.VideoPlayer;
                 RawImage = targetRenderer.RawImage;
                 RenderTexture = targetRenderer.RenderTexture;
@@ -83,9 +88,11 @@ namespace Cytoid.Storyboard.Videos
                 mediaPrepared = targetRenderer.mediaPrepared;
                 timelineSyncedBeforePlayback = targetRenderer.timelineSyncedBeforePlayback;
                 videoTimelineStartTime = targetRenderer.videoTimelineStartTime;
+                hasEnded = targetRenderer.hasEnded;
                 return;
             }
 
+            sharedPlaybackOwner = this;
             VideoPlayer = Instantiate(Provider.VideoVideoPlayerPrefab);
             RawImage = Instantiate(Provider.VideoRawImagePrefab, Provider.Canvas.transform);
             RenderTexture = new RenderTexture(UnityEngine.Screen.width / 2, UnityEngine.Screen.height / 2, 0, RenderTextureFormat.ARGB32);
@@ -118,8 +125,10 @@ namespace Cytoid.Storyboard.Videos
 
             ConfigureVideoPlayer(playerUrl);
             RawImage.texture = RenderTexture;
+            VideoPlayer.loopPointReached += OnLoopPointReached;
 
             mediaPrepared = await PrepareCurrentUrlAsync();
+            if (IsInitializeStale(version)) return;
         }
 
         private async UniTask<bool> PrepareCurrentUrlAsync()
@@ -150,6 +159,17 @@ namespace Cytoid.Storyboard.Videos
             return true;
         }
 
+        private void OnLoopPointReached(VideoPlayer _)
+        {
+            if (VideoPlayer != null && !VideoPlayer.isLooping)
+                hasEnded = true;
+        }
+
+        private bool HasSharedPlaybackEnded =>
+            sharedPlaybackOwner != null &&
+            !sharedPlaybackOwner.IsDisposed &&
+            sharedPlaybackOwner.hasEnded;
+
         private double ClampVideoTargetTime(double elapsed)
         {
             var length = VideoPlayer.length;
@@ -174,6 +194,9 @@ namespace Cytoid.Storyboard.Videos
 
         public override void Clear()
         {
+            if (ownsVideoObjects)
+                hasEnded = false;
+
             if (VideoPlayer != null)
             {
                 VideoPlayer.Stop();
@@ -191,6 +214,9 @@ namespace Cytoid.Storyboard.Videos
 
         public override void Dispose()
         {
+            if (IsDisposed) return;
+            if (ownsVideoObjects && VideoPlayer != null)
+                VideoPlayer.loopPointReached -= OnLoopPointReached;
             if (ownsVideoObjects)
             {
                 if (VideoPlayer != null) Destroy(VideoPlayer.gameObject);
@@ -204,6 +230,11 @@ namespace Cytoid.Storyboard.Videos
             VideoPlayer = null;
             RawImage = null;
             RenderTexture = null;
+            RectTransform = null;
+            Canvas = null;
+            ownsVideoObjects = false;
+            hasEnded = false;
+            sharedPlaybackOwner = null;
             base.Dispose();
         }
 
@@ -215,7 +246,7 @@ namespace Cytoid.Storyboard.Videos
 
         public void SyncPlaybackWithGameState(bool forceTimelineSync = false)
         {
-            if (VideoPlayer == null || MainRenderer == null || !mediaPrepared) return;
+            if (VideoPlayer == null || MainRenderer == null || !mediaPrepared || IsDisposed) return;
 
             var gameState = MainRenderer.Game?.State;
             if (gameState == null) return;
@@ -247,6 +278,8 @@ namespace Cytoid.Storyboard.Videos
 
             if (!VideoPlayer.isPlaying)
             {
+                if (HasSharedPlaybackEnded && !VideoPlayer.isLooping) return;
+
                 if (!timelineSyncedBeforePlayback)
                 {
                     timelineSyncedBeforePlayback = SyncVideoTimeline();

@@ -33,8 +33,6 @@ namespace Cytoid.Storyboard
         
         public readonly Dictionary<string, JObject> Templates = new Dictionary<string, JObject>();
 
-        private bool disposed;
-
         public Storyboard(Game game, string content)
         {
             Game = game;
@@ -130,71 +128,82 @@ namespace Cytoid.Storyboard
 
         public void Dispose()
         {
-            if (disposed) return;
-            disposed = true;
-
             Renderer.Dispose();
             Texts.Clear();
             Sprites.Clear();
-            Lines.Clear();
-            Videos.Clear();
             Controllers.Clear();
             NoteControllers.Clear();
             Triggers.Clear();
             Templates.Clear();
-            Game.onNoteClear.RemoveListener(OnNoteClear);
-            Game.onGameDisposed.RemoveListener(OnGameDisposed);
             Game.onGameLateUpdate.RemoveListener(Renderer.OnGameUpdate);
-            if (UnitFloat.Storyboard == this) UnitFloat.Storyboard = null;
         }
 
         public async UniTask Initialize()
         {
-            await Renderer.Initialize();
-            // Register note clear listener for triggers
-            Game.onNoteClear.AddListener(OnNoteClear);
-            Game.onGameDisposed.AddListener(OnGameDisposed);
-            Game.onGameLateUpdate.AddListener(Renderer.OnGameUpdate);
+            try
+            {
+                await Renderer.Initialize();
+                // Register note clear listener for triggers
+                Game.onNoteClear.AddListener(OnNoteClear);
+                Game.onGameDisposed.AddListener(_ => Dispose());
+                Game.onGameLateUpdate.AddListener(Renderer.OnGameUpdate);
+            }
+            catch
+            {
+                // Game.Initialize catches and continues; dispose partial renderer graph / parsed
+                // maps here so a failed load does not leave Storyboard state for the session.
+                Dispose();
+                throw;
+            }
         }
-
-        private void OnGameDisposed(Game _) => Dispose();
 
         public void OnNoteClear(Game game, Note note)
         {
-            for (var i = Triggers.Count - 1; i >= 0; i--)
+            // Fire in registration order, then remove by descending index so list mutation is safe
+            // and same-frame multi-trigger side effects keep legacy spawn/update ordering.
+            var removals = new HashSet<Trigger>();
+            for (var i = 0; i < Triggers.Count; i++)
             {
                 var trigger = Triggers[i];
+                var hit = false;
                 if (trigger.Type == TriggerType.NoteClear && trigger.Notes.Contains(note.Model.id))
                 {
                     trigger.Triggerer = note;
-                    OnTrigger(trigger);
+                    hit = true;
                 }
-
-                if (trigger.Type == TriggerType.Combo && Game.State.Combo == trigger.Combo)
+                else if (trigger.Type == TriggerType.Combo && Game.State.Combo == trigger.Combo)
                 {
                     trigger.Triggerer = note;
-                    OnTrigger(trigger);
+                    hit = true;
                 }
-
-                if (trigger.Type == TriggerType.Score && Game.State.Score >= trigger.Score)
+                else if (trigger.Type == TriggerType.Score && Game.State.Score >= trigger.Score)
                 {
                     trigger.Triggerer = note;
-                    OnTrigger(trigger);
-                    Triggers.Remove(trigger);
+                    hit = true;
                 }
+
+                if (!hit) continue;
+
+                var shouldRemove = OnTrigger(trigger);
+                // Score triggers remain one-shot after fire (legacy behavior).
+                if (shouldRemove || trigger.Type == TriggerType.Score)
+                    removals.Add(trigger);
+            }
+
+            for (var i = Triggers.Count - 1; i >= 0; i--)
+            {
+                if (removals.Contains(Triggers[i]))
+                    Triggers.RemoveAt(i);
             }
         }
 
-        public void OnTrigger(Trigger trigger)
+        /// <returns>True when the trigger should be removed from <see cref="Triggers"/>.</returns>
+        public bool OnTrigger(Trigger trigger)
         {
             Renderer.OnTrigger(trigger);
-            
-            // Destroy trigger if needed
+
             trigger.CurrentUses++;
-            if (trigger.CurrentUses == trigger.Uses)
-            {
-                Triggers.Remove(trigger);
-            }
+            return trigger.CurrentUses == trigger.Uses;
         }
 
         public JObject Compile()
@@ -398,31 +407,15 @@ namespace Cytoid.Storyboard
                 : TriggerType.None;
             trigger.Uses = (int?) json.SelectToken("uses") ?? trigger.Uses;
 
-            trigger.Notes = ReadTriggerIdList(json, "notes", trigger.Notes);
-            trigger.Spawn = ReadTriggerStringList(json, "spawn", trigger.Spawn);
-            trigger.Destroy = ReadTriggerStringList(json, "destroy", trigger.Destroy);
+            trigger.Notes = json["notes"] != null ? json.SelectToken("notes").Values<int>().ToList() : trigger.Notes;
+            trigger.Spawn = json["spawn"] != null ? json.SelectToken("spawn").Values<string>().ToList() : trigger.Spawn;
+            trigger.Destroy = json["destroy"] != null
+                ? json.SelectToken("destroy").Values<string>().ToList()
+                : trigger.Destroy;
             trigger.Combo = (int?) json.SelectToken("combo") ?? trigger.Combo;
             trigger.Score = (int?) json.SelectToken("score") ?? trigger.Score;
 
             return trigger;
-        }
-
-        private static List<int> ReadTriggerIdList(JObject json, string key, List<int> fallback)
-        {
-            var token = json[key];
-            if (token == null) return fallback;
-            if (token is JArray array) return array.Values<int>().ToList();
-            Debug.LogWarning($"Storyboard: Trigger field \"{key}\" must be a JSON array");
-            return new List<int>();
-        }
-
-        private static List<string> ReadTriggerStringList(JObject json, string key, List<string> fallback)
-        {
-            var token = json[key];
-            if (token == null) return fallback;
-            if (token is JArray array) return array.Values<string>().ToList();
-            Debug.LogWarning($"Storyboard: Trigger field \"{key}\" must be a JSON array");
-            return new List<string>();
         }
 
         private TO LoadObject<TO, TS>(JToken token) where TO : Object<TS>, new() where TS : ObjectState, new()
@@ -439,12 +432,10 @@ namespace Cytoid.Storyboard
             if (obj.TryGetValue("template", out var tmp))
             {
                 var templateId = (string) tmp;
-                JObject templateObject = null;
-                if (templateId == null || !Templates.TryGetValue(templateId, out templateObject))
-                    Debug.LogWarning($"Storyboard: Template \"{templateId}\" does not exist");
+                var templateObject = Templates[templateId];
 
                 // Template has states?
-                if (templateObject != null && templateObject["states"] != null)
+                if (templateObject["states"] != null)
                     AddStates(states, initialState, templateObject, ParseTime(obj, obj.SelectToken("time")));
             }
 
@@ -531,8 +522,7 @@ namespace Cytoid.Storyboard
             if (stateObject["template"] != null)
             {
                 var templateId = (string) stateObject["template"];
-                if (templateId == null || !Templates.TryGetValue(templateId, out templateObject))
-                    Debug.LogWarning($"Storyboard: Template \"{templateId}\" does not exist");
+                templateObject = Templates[templateId];
 
                 if (templateObject != null)
                 {
@@ -598,11 +588,7 @@ namespace Cytoid.Storyboard
                     }
                     return NumberUtils.ParseInt(it);
                 });
-                if (!Game.Chart.Model.note_map.TryGetValue(id, out var note))
-                {
-                    Debug.LogWarning($"Storyboard: Note {id} does not exist");
-                    return null;
-                }
+                var note = Game.Chart.Model.note_map[id];
                 switch (type)
                 {
                     case "intro":

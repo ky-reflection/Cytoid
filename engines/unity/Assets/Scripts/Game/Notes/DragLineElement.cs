@@ -1,7 +1,7 @@
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
-public partial class DragLineElement : MonoBehaviour
+public class DragLineElement : MonoBehaviour
 {
     private static readonly int MaterialEnd = Shader.PropertyToID("_End");
     private static readonly int MaterialStart = Shader.PropertyToID("_Start");
@@ -143,17 +143,11 @@ public partial class DragLineElement : MonoBehaviour
             introRatio = time < FromNoteModel.nextdraglinestarttime ? 1.0f : 0.0f;
         }
 
-        var outroDuration = ToNoteModel.start_time - FromNoteModel.start_time;
-        if (outroDuration > 0)
-        {
-            outroRatio = (time - FromNoteModel.start_time) / outroDuration;
-        }
+        var outroSpan = ToNoteModel.start_time - FromNoteModel.start_time;
+        if (outroSpan > 0f)
+            outroRatio = (time - FromNoteModel.start_time) / outroSpan;
         else
-        {
-            // Simultaneous or reverse drag chain: complete once at/after from-note start
-            // so Collect() can run (outroRatio >= 1). Avoids NaN locking the line forever.
-            outroRatio = time < FromNoteModel.start_time ? 0.0f : 1.0f;
-        }
+            outroRatio = time < FromNoteModel.start_time ? 0f : 1f;
 
         if (introRatio > 0 && introRatio < 1)
         {

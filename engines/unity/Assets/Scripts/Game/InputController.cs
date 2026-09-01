@@ -78,6 +78,26 @@ public class InputController : MonoBehaviour
         GameTouchInput.FingerDown -= OnFingerDown;
         GameTouchInput.FingerUpdate -= OnFingerUpdate;
         GameTouchInput.FingerUp -= OnFingerUp;
+        ResetBindingsWithoutJudgment();
+    }
+
+    /// <summary>
+    /// Release Hold/Flick finger ownership without producing new judgments.
+    /// Used by pause, Fail/Complete/Dispose via <see cref="DisableInput"/>.
+    /// </summary>
+    public void ResetBindingsWithoutJudgment()
+    {
+        HoldingNotes.Values.ForEach(note =>
+        {
+            note.HoldingFingers.Clear();
+        });
+        HoldingNotes.Clear();
+
+        FlickingNotes.Values.ForEach(note =>
+        {
+            if (!note.IsCleared) note.StopFlicking();
+        });
+        FlickingNotes.Clear();
     }
 
     public void OnNoteCollected(Note note)
@@ -105,17 +125,7 @@ public class InputController : MonoBehaviour
     /// </summary>
     public void ResetTouchState()
     {
-        HoldingNotes.Values.ForEach(note =>
-        {
-            note.HoldingFingers.Clear();
-        });
-        HoldingNotes.Clear();
-
-        FlickingNotes.Values.ForEach(note =>
-        {
-            if (!note.IsCleared) note.StopFlicking();
-        });
-        FlickingNotes.Clear();
+        ResetBindingsWithoutJudgment();
         TouchableDragNotes.Clear();
         TouchableHoldNotes.Clear();
         TouchableSelectNotes.Clear();
