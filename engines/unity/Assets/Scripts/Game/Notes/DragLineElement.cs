@@ -1,7 +1,7 @@
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
-public class DragLineElement : MonoBehaviour
+public partial class DragLineElement : MonoBehaviour
 {
     private static readonly int MaterialEnd = Shader.PropertyToID("_End");
     private static readonly int MaterialStart = Shader.PropertyToID("_Start");
@@ -23,6 +23,11 @@ public class DragLineElement : MonoBehaviour
     private float outroRatio;
 
     private float length;
+
+    // Coincident drag notes (same screen x/y across pages) produce a zero-length
+    // segment. RotationBetweenPositions then returns rotZ=0 (point up). Combined
+    // with scale.x=1 and _End growing, the 0.16 sprite rasterizes as an upward bar.
+    private const float MinDrawableLength = 0.0001f;
 
     private void Awake()
     {
@@ -48,6 +53,7 @@ public class DragLineElement : MonoBehaviour
         spriteRenderer.material.SetFloat(MaterialEnd, 0.0f);
         spriteRenderer.material.SetFloat(MaterialStart, 0.0f);
         UpdateTransform();
+        ApplyRendererEnabled();
         spriteRenderer.sortingOrder = fromNoteModel.id;
         Game.onGameUpdate.AddListener(OnGameUpdate);
     }
@@ -87,8 +93,11 @@ public class DragLineElement : MonoBehaviour
             }
         }
 
-        var fromNotePosition = hasFromNote ? (fromNote is DragHeadNote dragHeadNote ? dragHeadNote.OriginalPosition : fromNote.transform.localPosition) : FromNoteModel.CalculatePosition(Game.Chart);
-        var toNotePosition = hasToNote ? toNote.transform.localPosition : ToNoteModel.CalculatePosition(Game.Chart);
+        // Chart positions only. Spawned transforms are still (0,0) on the first
+        // onGameUpdate after pool spawn (note writes localPosition later in the
+        // same event). Reading them draws a phantom segment to the origin.
+        var fromNotePosition = FromNoteModel.CalculatePosition(Game.Chart);
+        var toNotePosition = ToNoteModel.CalculatePosition(Game.Chart);
         
         var transform = this.transform;
         transform.localPosition = fromNotePosition;
@@ -96,16 +105,32 @@ public class DragLineElement : MonoBehaviour
             fromNotePosition, 
             toNotePosition
         );
+        if (length < MinDrawableLength)
+        {
+            // Degenerate segment: keep the object alive for Collect / pool, but do
+            // not aim or scale the 0.16 sprite (rotZ=0 + scale.x=1 draws a bar).
+            length = 0f;
+            transform.localScale = Vector3.zero;
+            return;
+        }
+
         spriteRenderer.material.mainTextureScale = new Vector2(1.0f, length / 0.16f);
-        transform.localEulerAngles = hasFromNote ? fromNote.transform.localEulerAngles : FromNoteModel.rotation;
+        // Aim from the same endpoints used for length. Do not copy the from-note's
+        // transform rotation: Chart never bakes it, LateUpdate writes it after
+        // onGameUpdate, and a paused Lab seek never gets a second update.
+        transform.localEulerAngles = ChartModel.Note.RotationBetweenPositions(fromNotePosition, toNotePosition);
         transform.localScale = new Vector3(1.0f, length / 0.16f);
+    }
+
+    private void ApplyRendererEnabled()
+    {
+        spriteRenderer.enabled = length >= MinDrawableLength && !Game.State.Mods.Contains(Mod.HideNotes);
     }
 
     private void OnGameUpdate(Game _)
     {
         UpdateTransform();
-        
-        spriteRenderer.enabled = !Game.State.Mods.Contains(Mod.HideNotes);
+        ApplyRendererEnabled();
 
         if (outroRatio >= 1)
         {

@@ -91,7 +91,22 @@ public class GameRenderer
         {
             Context.ScreenManager.ActiveScreen.State = ScreenState.Inactive;
         }
-        cover.DOFade(0, 0.8f);
+        // Visual fade only; Abort/Retry skip this path, so asset release lives in DisposeResources.
+        if (cover != null) cover.DOFade(0, 0.8f);
+    }
+
+    /// <summary>
+    /// Idempotent cover cleanup for Complete / Abort / Retry (all call Game.Dispose).
+    /// </summary>
+    public void DisposeResources()
+    {
+        if (cover != null)
+        {
+            cover.DOKill();
+            cover.sprite = null;
+            cover = null;
+        }
+        Context.AssetMemory.DisposeTaggedCacheAssets(AssetTag.GameCover);
     }
 
     public void SetUiEventOpacity(float opacity, float animationOpacity)

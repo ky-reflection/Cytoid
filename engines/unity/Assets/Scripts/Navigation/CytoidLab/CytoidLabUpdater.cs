@@ -31,6 +31,9 @@ public static class CytoidLabUpdater
         public long ZipSizeBytes;
     }
 
+    /// <summary>Newest published Lab release newer than this build, or null.</summary>
+    public static UpdateInfo Available { get; private set; }
+
     public static bool IsSupported =>
         Application.platform == RuntimePlatform.WindowsPlayer ||
         Application.platform == RuntimePlatform.WindowsEditor;
@@ -56,13 +59,13 @@ public static class CytoidLabUpdater
             return null;
         }
 
-        MarkCheckedNow();
-
         if (request.result != UnityWebRequest.Result.Success)
         {
             Debug.LogWarning($"[CytoidLab] Update check HTTP error: {request.error}");
             return null;
         }
+
+        // Only cache a successful contact. A 403/timeout must not hide updates for 6 hours.
 
         try
         {
@@ -83,23 +86,23 @@ public static class CytoidLabUpdater
                 if (!IsNewerVersion(version, CytoidLabVersion.Version)) continue;
 
                 var assets = release["assets"] as JArray;
-                if (assets == null) continue;
-
                 string zipUrl = null;
                 long zipSize = 0;
-                foreach (var assetToken in assets)
+                if (assets != null)
                 {
-                    if (assetToken is not JObject asset) continue;
-                    var name = asset.Value<string>("name");
-                    if (!string.Equals(name, ZipAssetName, StringComparison.OrdinalIgnoreCase)) continue;
-                    zipUrl = asset.Value<string>("browser_download_url");
-                    zipSize = asset.Value<long?>("size") ?? 0;
-                    break;
+                    foreach (var assetToken in assets)
+                    {
+                        if (assetToken is not JObject asset) continue;
+                        var name = asset.Value<string>("name");
+                        if (!string.Equals(name, ZipAssetName, StringComparison.OrdinalIgnoreCase)) continue;
+                        zipUrl = asset.Value<string>("browser_download_url");
+                        zipSize = asset.Value<long?>("size") ?? 0;
+                        break;
+                    }
                 }
 
-                if (string.IsNullOrEmpty(zipUrl)) continue;
-
-                return new UpdateInfo
+                MarkCheckedNow();
+                Available = new UpdateInfo
                 {
                     Version = version,
                     TagName = tag,
@@ -107,7 +110,11 @@ public static class CytoidLabUpdater
                     HtmlUrl = release.Value<string>("html_url") ?? ReleasesPageUrl,
                     ZipSizeBytes = zipSize,
                 };
+                return Available;
             }
+
+            MarkCheckedNow();
+            Available = null;
         }
         catch (Exception e)
         {
@@ -155,7 +162,7 @@ public static class CytoidLabUpdater
         var workDir = Path.Combine(Path.GetTempPath(), "CytoidLabUpdate");
         Directory.CreateDirectory(workDir);
         var zipPath = Path.Combine(workDir, ZipAssetName);
-        var scriptPath = Path.Combine(workDir, "apply-update.cmd");
+        var scriptPath = Path.Combine(workDir, "apply-update.ps1");
 
         onStatus?.Invoke($"Downloading Cytoid Lab v{info.Version}...");
 
@@ -188,10 +195,17 @@ public static class CytoidLabUpdater
         var pid = Process.GetCurrentProcess().Id;
         try
         {
+            // powershell.exe -File: paths with spaces stay one argument. Do not name
+            // a parameter $PID — that shadows PowerShell's automatic variable.
             var startInfo = new ProcessStartInfo
             {
-                FileName = scriptPath,
-                Arguments = $"\"{installDir}\" \"{zipPath}\" {pid} \"{exePath}\"",
+                FileName = "powershell.exe",
+                Arguments =
+                    "-NoProfile -ExecutionPolicy Bypass -File \"" + scriptPath +
+                    "\" -InstallDir \"" + installDir +
+                    "\" -ZipPath \"" + zipPath +
+                    "\" -ProcessId " + pid +
+                    " -ExePath \"" + exePath + "\"",
                 UseShellExecute = true,
                 WorkingDirectory = workDir,
                 WindowStyle = ProcessWindowStyle.Minimized,
@@ -253,39 +267,47 @@ public static class CytoidLabUpdater
 
     private static string BuildUpdaterScript()
     {
-        // %1 install dir, %2 zip path, %3 pid, %4 exe path
-        return @"@echo off
-setlocal
-set ""INSTALL=%~1""
-set ""ZIP=%~2""
-set ""PID=%~3""
-set ""EXE=%~4""
-set ""EXTRACT=%TEMP%\CytoidLabUpdate\extract""
-echo Waiting for Cytoid Lab (PID %PID%) to exit...
-:wait
-tasklist /FI ""PID eq %PID%"" 2>NUL | find ""%PID%"" >NUL
-if not errorlevel 1 (
-  timeout /t 1 /nobreak >NUL
-  goto wait
+        // ASCII-only. Copy-Item -LiteralPath '...*' does not expand wildcards, and
+        // Copy-Item -Recurse into an existing CytoidLab_Data nests a second _Data.
+        // robocopy /E overlays files and /XD data leaves portable ./data alone.
+        return @"param(
+  [Parameter(Mandatory=$true)][string]$InstallDir,
+  [Parameter(Mandatory=$true)][string]$ZipPath,
+  [Parameter(Mandatory=$true)][int]$ProcessId,
+  [Parameter(Mandatory=$true)][string]$ExePath
 )
-if exist ""%EXTRACT%"" rmdir /s /q ""%EXTRACT%""
-mkdir ""%EXTRACT%"" >NUL 2>&1
-powershell -NoProfile -ExecutionPolicy Bypass -Command ""Expand-Archive -LiteralPath '%ZIP%' -DestinationPath '%EXTRACT%' -Force""
-if errorlevel 1 (
-  echo Expand failed. Opening releases page...
-  start """" ""https://github.com/ky-reflection/Cytoid/releases""
-  exit /b 1
-)
-powershell -NoProfile -ExecutionPolicy Bypass -Command ""Copy-Item -LiteralPath '%EXTRACT%\*' -Destination '%INSTALL%' -Recurse -Force""
-if errorlevel 1 (
-  echo Copy failed. Opening releases page...
-  start """" ""https://github.com/ky-reflection/Cytoid/releases""
-  exit /b 1
-)
-rmdir /s /q ""%EXTRACT%"" >NUL 2>&1
-del /f /q ""%ZIP%"" >NUL 2>&1
-start """" ""%EXE%""
-exit /b 0
+$ErrorActionPreference = 'Stop'
+$extract = Join-Path $env:TEMP 'CytoidLabUpdate\extract'
+$releases = 'https://github.com/ky-reflection/Cytoid/releases'
+try {
+  Write-Host ""Waiting for Cytoid Lab (PID $ProcessId) to exit...""
+  $deadline = (Get-Date).AddMinutes(2)
+  while (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) {
+    if ((Get-Date) -gt $deadline) { throw ""Timed out waiting for PID $ProcessId"" }
+    Start-Sleep -Seconds 1
+  }
+  Start-Sleep -Seconds 1
+  if (Test-Path -LiteralPath $extract) { Remove-Item -LiteralPath $extract -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $extract | Out-Null
+  Expand-Archive -LiteralPath $ZipPath -DestinationPath $extract -Force
+  $children = @(Get-ChildItem -LiteralPath $extract -Force)
+  if ($children.Count -eq 1 -and $children[0].PSIsContainer) {
+    $nestedExe = Join-Path $children[0].FullName 'CytoidLab.exe'
+    if (Test-Path -LiteralPath $nestedExe) { $extract = $children[0].FullName }
+  }
+  $robo = Start-Process -FilePath 'robocopy.exe' -ArgumentList @(
+    $extract, $InstallDir, '/E', '/XD', 'data', '/NFL', '/NDL', '/NJH', '/NJS', '/R:3', '/W:1'
+  ) -Wait -PassThru -NoNewWindow
+  if ($robo.ExitCode -ge 8) { throw ""robocopy failed with exit $($robo.ExitCode)"" }
+  Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $ZipPath -Force -ErrorAction SilentlyContinue
+  Start-Process -FilePath $ExePath -WorkingDirectory $InstallDir
+} catch {
+  Write-Host $_.Exception.Message
+  Start-Process $releases
+  exit 1
+}
+exit 0
 ";
     }
 }

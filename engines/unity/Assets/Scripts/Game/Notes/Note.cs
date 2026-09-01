@@ -250,17 +250,7 @@ public abstract partial class Note : MonoBehaviour
                 ? nextNote.transform.localPosition
                 : NextNoteModel.CalculatePosition(Game.Chart);
 
-            if (position == nextPosition)
-                Model.rotation = Vector3.zero;
-            else if (Math.Abs(position.y - nextPosition.y) < 0.000001)
-                Model.rotation = new Vector3(0, 0, position.x > nextPosition.x ? 90 : -90);
-            else if (Math.Abs(position.x - nextPosition.x) < 0.000001)
-                Model.rotation = new Vector3(0, 0, position.y > nextPosition.y ? -180 : 0);
-            else
-                Model.rotation = new Vector3(0, 0, -(
-                    Mathf.Atan((nextPosition.x - position.x) /
-                               (nextPosition.y - position.y)) / Mathf.PI * 180f +
-                    (nextPosition.y > position.y ? 0 : 180)));
+            Model.rotation = ChartModel.Note.RotationBetweenPositions(position, nextPosition);
         }
 
         var rotation = Model.rotation;

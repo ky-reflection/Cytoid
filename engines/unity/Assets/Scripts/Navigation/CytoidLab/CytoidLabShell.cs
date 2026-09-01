@@ -25,7 +25,9 @@ public class CytoidLabShell : MonoBehaviour
     public const string ViewportSizeSmall = "small";
     public const string ViewportSizeLarge = "large";
 
-    /// <summary>Overlay top chrome height at <see cref="PlayAreaHeight"/> reference.</summary>
+    /// <summary>
+    /// Overlay top chrome height at <see cref="PlayAreaHeight"/> reference.
+    /// </summary>
     public const float TopHudOverlayHeightPx = 40f;
 
     /// <summary>Overlay bottom chrome (timeline) height at reference resolution.</summary>

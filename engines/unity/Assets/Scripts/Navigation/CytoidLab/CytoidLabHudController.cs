@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Cysharp.Threading.Tasks;
+using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -25,6 +27,7 @@ public class CytoidLabHudController : MonoBehaviour
     private Button hitSoundButton;
     private Button noteIdsButton;
     private Button skipEndButton;
+    private Button compileButton;
     private Transform topBar;
     private Transform bottomBar;
     private Transform versionLabel;
@@ -35,11 +38,14 @@ public class CytoidLabHudController : MonoBehaviour
     private float topHudVisibility;
     private float bottomHudVisibility;
 
-    private const float HudEdgeSize = 40f;
+    private const float HudHoverPaddingPx = 24f;
+    private const float HudHideDelay = 0.2f;
     private const float HudAnimationSpeed = 12f;
     private const float TimelineTrackHeight = 6f;
     private const float TimelineHitHeight = 28f;
     private const float TimelineHandleSize = 12f;
+    private float topHideDelayLeft;
+    private float bottomHideDelayLeft;
 
     private void Awake()
     {
@@ -153,19 +159,30 @@ public class CytoidLabHudController : MonoBehaviour
     {
         if (topBar == null || bottomBar == null) return;
 
-        var topBandPx = CytoidLabShell.GetTopHudOverlayHeightPx();
-        var bottomBandPx = CytoidLabShell.GetBottomHudOverlayHeightPx();
-        var edgeSize = HudEdgeSize * UnityEngine.Screen.height / Mathf.Max(1, CytoidLabShell.PlayAreaHeight);
-        var step = Time.unscaledDeltaTime * HudAnimationSpeed;
+        var scale = canvas != null ? canvas.scaleFactor : 1f;
+        var topBandPx = CytoidLabShell.TopHudOverlayHeightPx * scale;
+        var bottomBandPx = CytoidLabShell.BottomHudOverlayHeightPx * scale;
+        var padPx = HudHoverPaddingPx * scale;
+        var dt = Time.unscaledDeltaTime;
+        var step = dt * HudAnimationSpeed;
 
-        var wantTopVisible = false;
-        var wantBottomVisible = isSliderInteracting;
+        var pointerInTop = false;
+        var pointerInBottom = isSliderInteracting;
 
         if (GameInputCompat.TryGetPointerScreenPosition(out var mouse))
         {
-            wantTopVisible = mouse.y >= UnityEngine.Screen.height - edgeSize;
-            wantBottomVisible = wantBottomVisible || mouse.y <= edgeSize;
+            // Dock-sized hover, not the sliding visual. CanvasScaler height != Screen.height/720.
+            pointerInTop = mouse.y >= UnityEngine.Screen.height - topBandPx - padPx;
+            pointerInBottom = pointerInBottom || mouse.y <= bottomBandPx + padPx;
         }
+
+        if (pointerInTop) topHideDelayLeft = HudHideDelay;
+        else topHideDelayLeft = Mathf.Max(0f, topHideDelayLeft - dt);
+        if (pointerInBottom) bottomHideDelayLeft = HudHideDelay;
+        else bottomHideDelayLeft = Mathf.Max(0f, bottomHideDelayLeft - dt);
+
+        var wantTopVisible = pointerInTop || topHideDelayLeft > 0f;
+        var wantBottomVisible = pointerInBottom || bottomHideDelayLeft > 0f;
 
         topHudVisibility = Mathf.MoveTowards(topHudVisibility, wantTopVisible ? 1f : 0f, step);
         bottomHudVisibility = Mathf.MoveTowards(bottomHudVisibility, wantBottomVisible ? 1f : 0f, step);
@@ -212,6 +229,8 @@ public class CytoidLabHudController : MonoBehaviour
         UpdateHitSoundButton();
         UpdateNoteIdsButton();
         UpdateSkipEndButton();
+        UpdateCompileButton();
+        UpdateFullscreenButtonLabel();
     }
 
     private void OnGameStarted()
@@ -247,7 +266,7 @@ public class CytoidLabHudController : MonoBehaviour
         rootRect.offsetMin = Vector2.zero;
         rootRect.offsetMax = Vector2.zero;
 
-        // Top bar (overlay)
+        // Top bar (single overlay row)
         topBar = CreateUiObject("TopBar", root).transform;
         var topRect = topBar.GetComponent<RectTransform>();
         topRect.anchorMin = new Vector2(0, 1);
@@ -276,13 +295,13 @@ public class CytoidLabHudController : MonoBehaviour
         playPauseButton.GetComponent<LayoutElement>().preferredWidth = 70;
 
         autoButton = CreateButton(topBar, "Auto", () => ToggleAuto());
-        autoButton.GetComponent<LayoutElement>().preferredWidth = 60;
+        autoButton.GetComponent<LayoutElement>().preferredWidth = 72;
         var autoColors = autoButton.colors;
         autoColors.normalColor = new Color(0.25f, 0.25f, 0.3f);
         autoButton.colors = autoColors;
 
         hitSoundButton = CreateButton(topBar, "Hitsound", () => ToggleHitSound());
-        hitSoundButton.GetComponent<LayoutElement>().preferredWidth = 80;
+        hitSoundButton.GetComponent<LayoutElement>().preferredWidth = 88;
         var hitSoundColors = hitSoundButton.colors;
         hitSoundColors.normalColor = new Color(0.25f, 0.35f, 0.55f);
         hitSoundButton.colors = hitSoundColors;
@@ -302,6 +321,9 @@ public class CytoidLabHudController : MonoBehaviour
         fullscreenButton = CreateButton(topBar, "Fullscreen", () => ToggleFullscreen());
         fullscreenButton.GetComponent<LayoutElement>().preferredWidth = 90;
 
+        compileButton = CreateButton(topBar, "Compile SB", ExportCompiledStoryboard);
+        compileButton.GetComponent<LayoutElement>().preferredWidth = 96;
+
         timeText = CreateText(topBar, "00:00 / 00:00", 14, TextAnchor.MiddleCenter);
         timeText.GetComponent<LayoutElement>().preferredWidth = 110;
 
@@ -310,7 +332,7 @@ public class CytoidLabHudController : MonoBehaviour
 
         statusText = CreateText(topBar, "", 14, TextAnchor.MiddleRight);
         statusText.color = new Color(1, 0.6f, 0.3f);
-        statusText.GetComponent<LayoutElement>().preferredWidth = 160;
+        statusText.GetComponent<LayoutElement>().preferredWidth = 140;
 
         // Top-right version watermark (follows top bar auto-hide)
         versionLabel = CreateUiObject("Version", root).transform;
@@ -480,7 +502,6 @@ public class CytoidLabHudController : MonoBehaviour
         CytoidLabUiInput.DisableKeyboardNavigation(btn);
         CytoidLabUi.ApplyRoundedButtonColors(btn);
 
-        // LayoutElement is required by callers that set preferredWidth.
         var layout = go.AddComponent<LayoutElement>();
         layout.preferredHeight = ButtonHeight;
 
@@ -730,6 +751,68 @@ public class CytoidLabHudController : MonoBehaviour
         var colors = skipEndButton.colors;
         colors.normalColor = enabled ? new Color(0.2f, 0.7f, 0.3f) : new Color(0.25f, 0.25f, 0.3f);
         skipEndButton.colors = colors;
+    }
+
+    private void UpdateCompileButton()
+    {
+        if (compileButton == null) return;
+
+        var hasSb = game?.Storyboard != null;
+        compileButton.interactable = hasSb;
+        var text = compileButton.GetComponentInChildren<Text>();
+        if (text != null) text.text = hasSb ? "Compile SB" : "No SB";
+    }
+
+    private void ExportCompiledStoryboard()
+    {
+        if (game?.Storyboard == null)
+        {
+            SetStatus("No storyboard loaded.");
+            return;
+        }
+
+        try
+        {
+            var compiled = game.Storyboard.Compile();
+            var dest = ResolveCompiledStoryboardPath();
+            var dir = Path.GetDirectoryName(dest);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(dest, compiled.ToString(Formatting.Indented));
+
+            var triggerCount = game.Storyboard.Triggers != null ? game.Storyboard.Triggers.Count : 0;
+            var extra = triggerCount > 0 ? $" (dropped {triggerCount} trigger(s))" : string.Empty;
+            SetStatus($"Wrote {Path.GetFileName(dest)}{extra}");
+            Debug.Log($"[CytoidLab] Compiled storyboard → {dest}{extra}");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[CytoidLab] Compile storyboard failed: {e}");
+            SetStatus("Compile SB failed.");
+        }
+    }
+
+    private string ResolveCompiledStoryboardPath()
+    {
+        var src = game.StoryboardPath;
+        if (string.IsNullOrEmpty(src) && game.Level != null)
+        {
+            src = game.Level.Path + "storyboard.json";
+        }
+
+        if (string.IsNullOrEmpty(src))
+        {
+            var install = CytoidLabPaths.GetUserLevelsRoot();
+            src = Path.Combine(string.IsNullOrEmpty(install) ? Path.GetTempPath() : install, "storyboard.json");
+        }
+
+        var dir = Path.GetDirectoryName(src) ?? "";
+        var name = Path.GetFileNameWithoutExtension(src);
+        if (name.EndsWith(".compiled", StringComparison.OrdinalIgnoreCase))
+        {
+            return src;
+        }
+
+        return Path.Combine(dir, name + ".compiled.json");
     }
 
     private void UpdatePlayPauseLabel()

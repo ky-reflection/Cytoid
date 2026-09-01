@@ -1,7 +1,7 @@
 # Cytoid Lab
 
 > Branch: `feature/cytoid-player` (historical name; ships **Cytoid Lab**)  
-> Version: **v0.1.3**
+> Version: **v0.2.2**
 
 **Cytoid Lab** is a Windows standalone chart preview and playtest tool built from the Unity core. It is aimed at chart authors and core developers — not at end players (use the main Cytoid app for that).
 
@@ -44,9 +44,16 @@ Bridge / mobile builds are unaffected (`GameEmbedMode.IsBridgeEmbedded` gates La
 
 ## Features
 
-**Current branch (unreleased)**
-- C2V3 page `PositionFunction` support for gameplay note, hold, scanner, and page-boundary coordinates
-- Legacy charts retain their existing linear page mapping; storyboard Y overrides remain on the legacy coordinate path
+**Current branch (v0.2.2)**
+- Compile SB writes `storyboard.compiled.json` beside the authoring file
+- Launch update check: red badge on **?**; Help links to the GitHub release
+- HUD hover matches the overlay bar plus padding
+- Drag-line degenerate segments hidden; aim from chart positions
+- Synced Cytoid/main #204–#208
+
+**v0.2.1**
+- Portable `./data`; open folder; remembered level/difficulty
+- Rounded Lab UI; import progress
 
 **v0.1.2**
 - Viewport presets (16:9 / 4:3, Small / Large); applies on Start

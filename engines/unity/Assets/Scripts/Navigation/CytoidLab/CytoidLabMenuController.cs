@@ -41,8 +41,8 @@ public class CytoidLabMenuController : MonoBehaviour
     private readonly Dictionary<Difficulty, Button> difficultyButtonMap = new Dictionary<Difficulty, Button>();
     private Button viewportCornerButton;
     private Text viewportCornerLabel;
-    private Button updateButton;
-    private Text updateButtonLabel;
+    private Button helpButton;
+    private GameObject helpUpdateBadge;
     private CytoidLabUpdater.UpdateInfo pendingUpdate;
     private bool isRefreshingLevelList;
     private bool updateCheckStarted;
@@ -156,13 +156,6 @@ public class CytoidLabMenuController : MonoBehaviour
 
         var title = CreateText(root, $"Cytoid Lab {CytoidLabVersion.DisplayName}", TitleFontSize, TextAnchor.MiddleCenter);
         title.GetComponent<LayoutElement>().preferredHeight = 44;
-
-        updateButton = CreateButton(root, "", () => OnUpdateButtonClicked().Forget());
-        updateButton.gameObject.SetActive(false);
-        var updateLe = updateButton.GetComponent<LayoutElement>();
-        updateLe.preferredHeight = ButtonHeight;
-        CytoidLabUi.ApplyRoundedButtonColors(updateButton, CytoidLabUi.AccentBlue);
-        updateButtonLabel = updateButton.GetComponentInChildren<Text>();
 
         selectionHintText = CreateText(root,
             DefaultSelectionHint,
@@ -372,38 +365,25 @@ public class CytoidLabMenuController : MonoBehaviour
         CheckForUpdatesAsync().Forget();
     }
 
-    private async UniTaskVoid CheckForUpdatesAsync()
+    private async UniTask CheckForUpdatesAsync()
     {
-        var info = await CytoidLabUpdater.CheckForUpdateAsync();
-        if (info == null || CytoidLabUpdater.IsDismissed(info)) return;
-
-        pendingUpdate = info;
-        if (updateButton == null) return;
-
-        if (updateButtonLabel != null)
+        var info = await CytoidLabUpdater.CheckForUpdateAsync(force: true);
+        if (info == null)
         {
-            var sizeMb = info.ZipSizeBytes > 0 ? $" (~{info.ZipSizeBytes / (1024f * 1024f):0} MB)" : string.Empty;
-            updateButtonLabel.text = $"Update available: v{info.Version}{sizeMb}";
-        }
-
-        updateButton.gameObject.SetActive(true);
-        SetStatus($"Cytoid Lab v{info.Version} is available. Click the update button to install.");
-    }
-
-    private async UniTaskVoid OnUpdateButtonClicked()
-    {
-        if (pendingUpdate == null)
-        {
-            Application.OpenURL(CytoidLabUpdater.ReleasesPageUrl);
+            pendingUpdate = null;
+            if (helpUpdateBadge != null) helpUpdateBadge.SetActive(false);
             return;
         }
 
-        if (updateButton != null) updateButton.interactable = false;
-        var ok = await CytoidLabUpdater.DownloadAndApplyAsync(pendingUpdate, SetStatus);
-        if (!ok && updateButton != null)
-        {
-            updateButton.interactable = true;
-        }
+        pendingUpdate = info;
+        if (helpUpdateBadge != null) helpUpdateBadge.SetActive(true);
+        SetStatus($"Cytoid Lab v{info.Version} is available. Open Help (?) for the release link.");
+        Debug.Log($"[CytoidLab] Update available: v{info.Version} {info.HtmlUrl}");
+    }
+
+    private void OpenHelp()
+    {
+        CytoidLabHelpOverlay.Open(canvas.transform, uiFont, pendingUpdate);
     }
 
     private void BuildCornerButtons(Transform parent)
@@ -413,21 +393,24 @@ public class CytoidLabMenuController : MonoBehaviour
         const float spacing = 8f;
         const float margin = 16f;
 
-        viewportCornerButton = CreateCornerButton(parent, "ViewportCornerButton",
-            new Vector2(-(margin + buttonSize + spacing + viewportWidth) + 20f, -margin),
-            new Vector2(viewportWidth, buttonSize),
-            OpenViewportOverlay, out viewportCornerLabel);
-        viewportCornerLabel.fontSize = 16;
-        viewportCornerLabel.fontStyle = FontStyle.Bold;
-
-        CreateCornerButton(parent, "HelpButton",
+        helpButton = CreateCornerButton(parent, "HelpButton",
             new Vector2(-margin, -margin),
             new Vector2(buttonSize, buttonSize),
-            () => CytoidLabHelpOverlay.Open(canvas.transform, uiFont),
+            OpenHelp,
             out var helpLabel);
         helpLabel.text = "?";
         helpLabel.fontSize = 24;
         helpLabel.fontStyle = FontStyle.Bold;
+        helpUpdateBadge = CreateUpdateBadge(helpButton.transform);
+        helpUpdateBadge.SetActive(false);
+
+        var viewportX = -(margin + buttonSize + spacing);
+        viewportCornerButton = CreateCornerButton(parent, "ViewportCornerButton",
+            new Vector2(viewportX, -margin),
+            new Vector2(viewportWidth, buttonSize),
+            OpenViewportOverlay, out viewportCornerLabel);
+        viewportCornerLabel.fontSize = 16;
+        viewportCornerLabel.fontStyle = FontStyle.Bold;
 
         UpdateViewportCornerButton();
     }
@@ -463,6 +446,22 @@ public class CytoidLabMenuController : MonoBehaviour
         label.color = Color.white;
 
         return btn;
+    }
+
+    private static GameObject CreateUpdateBadge(Transform parent)
+    {
+        var go = CreateUiObject("Badge", parent);
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(1f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(1f, 1f);
+        rect.anchoredPosition = new Vector2(-4f, -4f);
+        rect.sizeDelta = new Vector2(10f, 10f);
+        var image = go.AddComponent<Image>();
+        image.color = new Color(0.95f, 0.35f, 0.35f, 1f);
+        image.raycastTarget = false;
+        CytoidLabUi.ApplyRoundedCorners(image, 5f);
+        return go;
     }
 
     private static GameObject CreateUiObject(string name, Transform parent)

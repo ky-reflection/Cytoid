@@ -19,7 +19,8 @@ public class CytoidLabHelpOverlay : MonoBehaviour
     private static readonly Color BodyColor = new Color(0.9f, 0.91f, 0.94f);
     private static readonly Color MutedColor = new Color(0.65f, 0.68f, 0.74f);
 
-    public static CytoidLabHelpOverlay Open(Transform canvasTransform, Font font)
+    public static CytoidLabHelpOverlay Open(Transform canvasTransform, Font font,
+        CytoidLabUpdater.UpdateInfo update = null)
     {
         var existing = canvasTransform.GetComponentInChildren<CytoidLabHelpOverlay>(true);
         if (existing != null)
@@ -31,11 +32,11 @@ public class CytoidLabHelpOverlay : MonoBehaviour
         go.transform.SetParent(canvasTransform, false);
         go.transform.SetAsLastSibling();
         var overlay = go.AddComponent<CytoidLabHelpOverlay>();
-        overlay.Build(font);
+        overlay.Build(font, update ?? CytoidLabUpdater.Available);
         return overlay;
     }
 
-    private void Build(Font font)
+    private void Build(Font font, CytoidLabUpdater.UpdateInfo update)
     {
         StretchFull(GetComponent<RectTransform>());
 
@@ -49,7 +50,7 @@ public class CytoidLabHelpOverlay : MonoBehaviour
         CytoidLabUiInput.DisableKeyboardNavigation(backdropBtn);
 
         var panelW = Mathf.Min(UnityEngine.Screen.width * 0.88f, 560f);
-        var panelH = Mathf.Min(UnityEngine.Screen.height * 0.78f, 520f);
+        var panelH = Mathf.Min(UnityEngine.Screen.height * 0.78f, update != null ? 560f : 520f);
 
         var panel = CreateChild("Panel", transform);
         var panelRect = panel.GetComponent<RectTransform>();
@@ -126,6 +127,11 @@ public class CytoidLabHelpOverlay : MonoBehaviour
 
         scroll.content = contentRect;
         scroll.viewport = viewport.GetComponent<RectTransform>();
+
+        if (update != null)
+        {
+            AddUpdateBanner(content.transform, font, update);
+        }
 
         AddSection(content.transform, font, "About", GetAboutText());
         AddSection(content.transform, font, "Level menu", GetMenuText());
@@ -234,6 +240,37 @@ public class CytoidLabHelpOverlay : MonoBehaviour
         bodyLe.flexibleWidth = 1;
     }
 
+    private static void AddUpdateBanner(Transform parent, Font font, CytoidLabUpdater.UpdateInfo update)
+    {
+        AddSection(parent, font, "Update available",
+            $"Cytoid Lab v{update.Version} is on GitHub (this build is {CytoidLabVersion.DisplayName}). " +
+            "Open the release page to download — Lab does not install updates itself.");
+
+        var go = CreateChild("ReleaseLink", parent);
+        var le = go.AddComponent<LayoutElement>();
+        le.preferredHeight = 36;
+        le.flexibleWidth = 1;
+        var image = go.AddComponent<Image>();
+        image.color = Color.white;
+        CytoidLabUi.ApplyRoundedCorners(image, CytoidLabUi.ButtonRadius);
+        var btn = go.AddComponent<Button>();
+        CytoidLabUi.ApplyRoundedButtonColors(btn, CytoidLabUi.AccentBlue);
+        var url = string.IsNullOrEmpty(update.HtmlUrl) ? CytoidLabUpdater.ReleasesPageUrl : update.HtmlUrl;
+        btn.onClick.AddListener(() => Application.OpenURL(url));
+        CytoidLabUiInput.DisableKeyboardNavigation(btn);
+
+        var labelGo = CreateChild("Label", go.transform);
+        StretchFull(labelGo.GetComponent<RectTransform>());
+        var text = labelGo.AddComponent<Text>();
+        text.font = font;
+        text.text = "Open GitHub release";
+        text.fontSize = 15;
+        text.fontStyle = FontStyle.Bold;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.color = Color.white;
+        text.raycastTarget = false;
+    }
+
     private static string GetAboutText()
     {
         return "Cytoid Lab is a Windows chart preview and playtest tool for authors and core developers. "
@@ -242,10 +279,10 @@ public class CytoidLabHelpOverlay : MonoBehaviour
 
     private static string GetMenuText()
     {
-        return "Top-right Viewport button (left of ?) — aspect 16:9 or 4:3; size Small (1280 wide, default) or Large (1920 wide). "
-               + "Example: 16:9 Small = 1280×720, 16:9 Large = 1920×1080. Changes the window size; press Start to apply note/storyboard layout.\n"
+        return "Top-right: Viewport (16:9 or 4:3, Small / Large), then ? help.\n"
+               + "Example: 16:9 Small = 1280×720, 16:9 Large = 1920×1080. Viewport changes the window size; press Start to apply note/storyboard layout.\n"
                + "Viewport choice is remembered after quit.\n"
-               + "When a newer Lab release is on GitHub, an Update button appears under the title.\n"
+               + "A red badge on ? means a newer GitHub release is available — open Help for the download link.\n"
                + "Play area is restricted to 4:3–16:9 by default (same as the main app).";
     }
 
@@ -266,7 +303,8 @@ public class CytoidLabHelpOverlay : MonoBehaviour
     private static string GetHudText()
     {
         return "Move the pointer to the top or bottom edge to reveal controls.\n"
-               + "Auto — autoplay chart; Hitsound — toggle hit sound; IDs — note id overlay.\n"
+               + "Top bar: Back, Reset, Play, Auto, Hitsound, IDs, End, Fullscreen, Compile SB, time, status.\n"
+               + "Compile SB writes storyboard.compiled.json next to the source (does not overwrite authoring JSON; triggers are not included).\n"
                + "End — skip end: fast fade and exit when chart clears (default On). Off plays out music and post-chart storyboard.\n"
                + "Reset — reload the playfield; Back — return to level menu.";
     }

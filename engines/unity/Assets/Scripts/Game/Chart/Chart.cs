@@ -217,6 +217,14 @@ public class Chart
                 note.intro_time = note.start_time - 1.367f / speed;
         }
 
+        // Bake drag-chain aim before any note LateUpdate (Lab seek / unspawned from-notes).
+        foreach (var note in Model.note_list)
+        {
+            if (note.next_id <= 0 || !Model.note_map.ContainsKey(note.next_id)) continue;
+            var next = Model.note_map[note.next_id];
+            note.rotation = ChartModel.Note.RotationBetweenPositions(note.position, next.position);
+        }
+
         foreach (var type in (NoteType[]) Enum.GetValues(typeof(NoteType)))
         {
             MaxSamePageNoteCountByType[type] = pageNoteCountsByType[type].Max();
