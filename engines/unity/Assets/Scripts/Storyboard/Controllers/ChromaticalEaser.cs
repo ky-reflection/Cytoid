@@ -18,7 +18,7 @@ namespace Cytoid.Storyboard.Controllers
             if (From.Chromatical.Value)
             {
                 // Keep AnimationTime moving so a vendor sync cannot pin TimeX at reset.
-                effect.AnimationTime += Time.deltaTime * 2f;
+                effect.AnimationTime += UnityEngine.Time.deltaTime * 2f;
                 if (effect.AnimationTime > 100f)
                     effect.AnimationTime = 0f;
 
