@@ -126,12 +126,15 @@ namespace Cytoid.Storyboard.PostProcess
     {
         public float Speed = 1f;
         public float TimeX = 1f;
+        // When true, vendor writes TimeX (reset). When false, CameraFilterPack owns the clock.
+        public bool ResetTimeX = true;
 
         public void Reset()
         {
             Enabled = false;
             Speed = 1f;
             TimeX = 1f;
+            ResetTimeX = true;
         }
     }
 

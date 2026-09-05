@@ -6,9 +6,29 @@ Build artifact: `.\engines\unity\build-cytoid-lab.ps1 -Package -KeepLog` → `en
 
 ---
 
-## Unreleased (next after v0.2.2)
+## Unreleased (next after v0.2.3)
 
 _(empty)_
+
+---
+
+## v0.2.3
+
+**Tag:** `cytoid-lab-v0.2.3` · **Title:** Cytoid Lab v0.2.3
+
+### English
+
+Windows 10/11 x64 · Unity **6000.0.75f1** core
+
+- **Chromatical** — RGB split pulses again (Lab had been pinning `TimeX`, so aberration stayed at the weak reset phase)
+- **Shockwave** — wave front expands instead of sitting at the origin (same clock pin)
+
+### 中文
+
+Windows 10/11 x64 · Unity **6000.0.75f1** core
+
+- **Chromatical** — 色散脉冲恢复（Lab 每帧把 `TimeX` 钉在重置值，色散一直偏弱）
+- **Shockwave** — 冲击波会向外扩散，不再停在中心（同一类时钟问题）
 
 ---
 

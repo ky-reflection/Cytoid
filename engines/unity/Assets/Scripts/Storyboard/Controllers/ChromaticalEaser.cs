@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace Cytoid.Storyboard.Controllers
 {
     public class ChromaticalEaser : StoryboardRendererEaser<ControllerState>
@@ -15,6 +17,11 @@ namespace Cytoid.Storyboard.Controllers
             effect.Enabled = From.Chromatical.Value;
             if (From.Chromatical.Value)
             {
+                // Keep AnimationTime moving so a vendor sync cannot pin TimeX at reset.
+                effect.AnimationTime += Time.deltaTime * 2f;
+                if (effect.AnimationTime > 100f)
+                    effect.AnimationTime = 0f;
+
                 if (From.ChromaticalFade != null)
                     effect.Fade = EaseFloat(From.ChromaticalFade, To.ChromaticalFade);
                 if (From.ChromaticalIntensity != null)
