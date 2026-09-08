@@ -103,6 +103,7 @@ public class InputController : MonoBehaviour
             {
                 var holdNote = (HoldNote) note;
                 if (holdNote.IsHolding) continue;
+                if (!holdNote.CanAcceptFingerAtCurrentTime()) continue;
                 TouchableHoldNotes.Add(holdNote);
                 TouchableSelectNotes.Add(holdNote);
                 continue;

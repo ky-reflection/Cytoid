@@ -4,6 +4,12 @@ using UnityEngine;
 
 public class HoldNote : Note
 {
+    /// <summary>
+    /// Held-duration Perfect leniency. Also the earliest a durationless hold
+    /// (<c>Duration &lt;= this</c>) may be bound; see <see cref="CanAcceptFingerAtCurrentTime"/>.
+    /// </summary>
+    public const float PerfectHoldDurationLeniency = 0.05f;
+
     public float HoldingStartTime { get; protected set; } = float.MaxValue;
     public float HeldDuration  { get; protected set; }
     public float HoldProgress { get; protected set; }
@@ -12,6 +18,19 @@ public class HoldNote : Note
     private bool playedHitSoundAtBegin;
     
     public bool IsHolding => HoldingFingers.Count > 0;
+
+    /// <summary>
+    /// Longer holds can be pressed as soon as they have emerged.
+    /// Durationless holds (e.g. hold_tick=15, ~14ms) must wait until
+    /// <see cref="PerfectHoldDurationLeniency"/> before start; earlier FingerUpdate
+    /// binds are released before start and never settle.
+    /// </summary>
+    public bool CanAcceptFingerAtCurrentTime()
+    {
+        if (Model == null || IsCleared || IsCollected) return false;
+        if (Model.Duration > PerfectHoldDurationLeniency) return true;
+        return Game.Time >= Model.start_time + JudgmentOffset - PerfectHoldDurationLeniency;
+    }
 
     protected override NoteRenderer CreateRenderer()
     {
@@ -111,8 +130,7 @@ public class HoldNote : Note
     {
         var grade = NoteGrade.Miss;
         var rankedGrade = NoteGrade.Miss;
-        // print($"HeldDuration: {HeldDuration}, ModelDuration: {Model.Duration}, HoldingStartTime: {HoldingStartTime}, ModelStartTime: {Model.start_time}");
-        if (HeldDuration > Model.Duration - 0.05f) grade = NoteGrade.Perfect;
+        if (HeldDuration > Model.Duration - PerfectHoldDurationLeniency) grade = NoteGrade.Perfect;
         else if (HeldDuration > Model.Duration * 0.7f) grade = NoteGrade.Great;
         else if (HeldDuration > Model.Duration * 0.5f) grade = NoteGrade.Good;
         else if (HeldDuration > Model.Duration * 0.3f) grade = NoteGrade.Bad;
@@ -132,7 +150,7 @@ public class HoldNote : Note
             {
                 rankedGrade = grade;
                 if (rankedGrade == NoteGrade.Great) GreatGradeWeight = 1.0f - (HeldDuration - Model.Duration * 0.70f) /
-                                       (Model.Duration - 0.050f - Model.Duration * 0.70f);
+                                       (Model.Duration - PerfectHoldDurationLeniency - Model.Duration * 0.70f);
             }
         }
 
