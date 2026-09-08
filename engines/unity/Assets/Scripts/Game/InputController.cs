@@ -102,7 +102,8 @@ public class InputController : MonoBehaviour
             if (note.Type == NoteType.Hold || note.Type == NoteType.LongHold)
             {
                 var holdNote = (HoldNote) note;
-                if (holdNote.IsHolding || holdNote.IsShortHoldContactLatched) continue;
+                if (holdNote.IsHolding) continue;
+                if (!holdNote.CanAcceptFingerAtCurrentTime()) continue;
                 TouchableHoldNotes.Add(holdNote);
                 TouchableSelectNotes.Add(holdNote);
                 continue;
@@ -164,8 +165,7 @@ public class InputController : MonoBehaviour
             if (note is HoldNote holdNote)
             {
                 // Lists are per-frame snapshots; same-frame multi-finger rebind uses Update.
-                if (holdNote.IsHolding || holdNote.IsShortHoldContactLatched ||
-                    HoldingNotes.ContainsKey(finger.Index)) continue;
+                if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index)) continue;
                 if (!IsEligibleSelectAfterDrag(holdNote, acceptedDrag)) continue;
                 hitCandidates.Add(holdNote);
                 continue;
@@ -228,8 +228,7 @@ public class InputController : MonoBehaviour
             if (note is HoldNote holdNote)
             {
                 // Reject holds already bound this frame (stale snapshot).
-                if (holdNote.IsHolding || holdNote.IsShortHoldContactLatched ||
-                    HoldingNotes.ContainsKey(finger.Index)) continue;
+                if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index)) continue;
                 HoldingNotes.Add(finger.Index, holdNote);
                 holdNote.UpdateFinger(finger.Index, true);
                 hitCandidates.Clear();

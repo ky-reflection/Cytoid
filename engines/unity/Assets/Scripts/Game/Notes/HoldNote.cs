@@ -5,17 +5,10 @@ using UnityEngine;
 public class HoldNote : Note
 {
     /// <summary>
-    /// Held-duration Perfect leniency. Holds shorter than this cannot fail the
-    /// duration check (<c>HeldDuration &gt; Duration - leniency</c> is always true).
+    /// Held-duration Perfect leniency. Also the earliest a durationless hold
+    /// (<c>Duration &lt;= this</c>) may be bound; see <see cref="CanAcceptFingerAtCurrentTime"/>.
     /// </summary>
     public const float PerfectHoldDurationLeniency = 0.05f;
-
-    /// <summary>
-    /// Max earliness (seconds before start) at which a durationless hold may latch
-    /// a sliding/tap contact that then leaves before start. Matches ranked late Bad.
-    /// Earlier brushes (e.g. mid-drag overlap ~300ms early) are ignored.
-    /// </summary>
-    public const float ShortHoldEarlyLatchWindow = 0.200f;
 
     public float HoldingStartTime { get; protected set; } = float.MaxValue;
     public float HeldDuration  { get; protected set; }
@@ -23,17 +16,21 @@ public class HoldNote : Note
     public List<int> HoldingFingers { get; } = new List<int>(2);
 
     private bool playedHitSoundAtBegin;
-    private bool shortHoldContactLatched;
-
+    
     public bool IsHolding => HoldingFingers.Count > 0;
 
     /// <summary>
-    /// Durationless hold that received a valid contact and will settle at start
-    /// even if the finger already left. Input should not re-bind this note.
+    /// Longer holds can be pressed as soon as they have emerged.
+    /// Durationless holds (e.g. hold_tick=15, ~14ms) must wait until
+    /// <see cref="PerfectHoldDurationLeniency"/> before start; earlier FingerUpdate
+    /// binds are released before start and never settle.
     /// </summary>
-    public bool IsShortHoldContactLatched => shortHoldContactLatched;
-
-    private bool IsDurationlessHold => Model != null && Model.Duration <= PerfectHoldDurationLeniency;
+    public bool CanAcceptFingerAtCurrentTime()
+    {
+        if (Model == null || IsCleared || IsCollected) return false;
+        if (Model.Duration > PerfectHoldDurationLeniency) return true;
+        return Game.Time >= Model.start_time + JudgmentOffset - PerfectHoldDurationLeniency;
+    }
 
     protected override NoteRenderer CreateRenderer()
     {
@@ -51,35 +48,23 @@ public class HoldNote : Note
         HoldProgress = default;
         HoldingFingers.Clear();
         playedHitSoundAtBegin = false;
-        shortHoldContactLatched = false;
         base.Collect();
     }
 
     protected override void OnGameUpdate(Game _)
     {
         base.OnGameUpdate(_);
-        if (IsCleared) return;
-
-        var start = Model.start_time + JudgmentOffset;
-        if (shortHoldContactLatched && Game.Time >= start)
-        {
-            SettleFromContact();
-            return;
-        }
-
         if (IsHolding)
         {
-            if (Game.Time >= start)
+            if (Game.Time >= Model.start_time + JudgmentOffset)
             {
-                HeldDuration = Game.Time - Mathf.Max(start, HoldingStartTime);
+                HeldDuration = Game.Time - Mathf.Max(Model.start_time + JudgmentOffset, HoldingStartTime);
             }
             else
             {
                 HeldDuration = 0;
             }
-            HoldProgress = Model.Duration > 1e-4f
-                ? (Game.Time - start) / Model.Duration
-                : (Game.Time >= start ? 1f : 0f);
+            HoldProgress = (Game.Time - (Model.start_time + JudgmentOffset)) / Model.Duration;
             
             if (!playedHitSoundAtBegin && HoldProgress >= 0 && Context.Player.Settings.HoldHitSoundTiming.Let(it => it == HoldHitSoundTiming.Begin || it == HoldHitSoundTiming.Both))
             {
@@ -91,7 +76,7 @@ public class HoldNote : Note
             if (Game.Time >= Model.end_time + JudgmentOffset)
             {
                 HoldingFingers.Clear();
-                if (Game.Time > start && Game.State.IsPlaying)
+                if (Game.Time > Model.start_time + JudgmentOffset && Game.State.IsPlaying)
                 {
                     Clear(IsAutoEnabled() ? NoteGrade.Perfect : CalculateGrade());
                 }
@@ -105,7 +90,6 @@ public class HoldNote : Note
 
     public override bool ShouldMiss()
     {
-        if (shortHoldContactLatched) return false;
         return !IsHolding && base.ShouldMiss();
     }
     
@@ -123,18 +107,15 @@ public class HoldNote : Note
         if (isHolding)
         {
             HoldingFingers.Add(finger);
-            if (!previouslyHolding && !shortHoldContactLatched)
+            if (!previouslyHolding)
             {
                 HoldingStartTime = Game.Time;
-                TryLatchShortHoldContact();
             }
         }
         else
         {
             HoldingFingers.Remove(finger);
         }
-
-        if (IsCleared) return;
 
         if (HoldingFingers.Count == 0 && Game.Time > Model.start_time + JudgmentOffset)
         {
@@ -143,40 +124,6 @@ public class HoldNote : Note
                 Clear(IsAutoEnabled() ? NoteGrade.Perfect : CalculateGrade());
             }
         }
-    }
-
-    /// <summary>
-    /// Durationless holds (chart duration ≤ Perfect leniency, e.g. hold_tick=15 ≈ 14ms)
-    /// already grade Perfect on any HeldDuration. Sliding contact that leaves before
-    /// start never reached CalculateGrade; latch that contact and settle at start.
-    /// </summary>
-    private void TryLatchShortHoldContact()
-    {
-        if (!IsDurationlessHold || IsCleared) return;
-
-        var start = Model.start_time + JudgmentOffset;
-        var earlyBy = start - Game.Time;
-        if (earlyBy > ShortHoldEarlyLatchWindow) return;
-
-        shortHoldContactLatched = true;
-        if (Game.Time >= start && Game.State.IsPlaying)
-            SettleFromContact();
-    }
-
-    private void SettleFromContact()
-    {
-        if (IsCleared || !Game.State.IsPlaying) return;
-
-        if (!playedHitSoundAtBegin &&
-            Context.Player.Settings.HoldHitSoundTiming.Let(it =>
-                it == HoldHitSoundTiming.Begin || it == HoldHitSoundTiming.Both))
-        {
-            playedHitSoundAtBegin = true;
-            PlayHitSound();
-        }
-
-        HoldingFingers.Clear();
-        Clear(IsAutoEnabled() ? NoteGrade.Perfect : CalculateGrade());
     }
 
     public override NoteGrade CalculateGrade()
