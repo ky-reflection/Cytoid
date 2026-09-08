@@ -4,14 +4,36 @@ using UnityEngine;
 
 public class HoldNote : Note
 {
+    /// <summary>
+    /// Held-duration Perfect leniency. Holds shorter than this cannot fail the
+    /// duration check (<c>HeldDuration &gt; Duration - leniency</c> is always true).
+    /// </summary>
+    public const float PerfectHoldDurationLeniency = 0.05f;
+
+    /// <summary>
+    /// Max earliness (seconds before start) at which a durationless hold may latch
+    /// a sliding/tap contact that then leaves before start. Matches ranked late Bad.
+    /// Earlier brushes (e.g. mid-drag overlap ~300ms early) are ignored.
+    /// </summary>
+    public const float ShortHoldEarlyLatchWindow = 0.200f;
+
     public float HoldingStartTime { get; protected set; } = float.MaxValue;
     public float HeldDuration  { get; protected set; }
     public float HoldProgress { get; protected set; }
     public List<int> HoldingFingers { get; } = new List<int>(2);
 
     private bool playedHitSoundAtBegin;
-    
+    private bool shortHoldContactLatched;
+
     public bool IsHolding => HoldingFingers.Count > 0;
+
+    /// <summary>
+    /// Durationless hold that received a valid contact and will settle at start
+    /// even if the finger already left. Input should not re-bind this note.
+    /// </summary>
+    public bool IsShortHoldContactLatched => shortHoldContactLatched;
+
+    private bool IsDurationlessHold => Model != null && Model.Duration <= PerfectHoldDurationLeniency;
 
     protected override NoteRenderer CreateRenderer()
     {
@@ -29,23 +51,35 @@ public class HoldNote : Note
         HoldProgress = default;
         HoldingFingers.Clear();
         playedHitSoundAtBegin = false;
+        shortHoldContactLatched = false;
         base.Collect();
     }
 
     protected override void OnGameUpdate(Game _)
     {
         base.OnGameUpdate(_);
+        if (IsCleared) return;
+
+        var start = Model.start_time + JudgmentOffset;
+        if (shortHoldContactLatched && Game.Time >= start)
+        {
+            SettleFromContact();
+            return;
+        }
+
         if (IsHolding)
         {
-            if (Game.Time >= Model.start_time + JudgmentOffset)
+            if (Game.Time >= start)
             {
-                HeldDuration = Game.Time - Mathf.Max(Model.start_time + JudgmentOffset, HoldingStartTime);
+                HeldDuration = Game.Time - Mathf.Max(start, HoldingStartTime);
             }
             else
             {
                 HeldDuration = 0;
             }
-            HoldProgress = (Game.Time - (Model.start_time + JudgmentOffset)) / Model.Duration;
+            HoldProgress = Model.Duration > 1e-4f
+                ? (Game.Time - start) / Model.Duration
+                : (Game.Time >= start ? 1f : 0f);
             
             if (!playedHitSoundAtBegin && HoldProgress >= 0 && Context.Player.Settings.HoldHitSoundTiming.Let(it => it == HoldHitSoundTiming.Begin || it == HoldHitSoundTiming.Both))
             {
@@ -57,7 +91,7 @@ public class HoldNote : Note
             if (Game.Time >= Model.end_time + JudgmentOffset)
             {
                 HoldingFingers.Clear();
-                if (Game.Time > Model.start_time + JudgmentOffset && Game.State.IsPlaying)
+                if (Game.Time > start && Game.State.IsPlaying)
                 {
                     Clear(IsAutoEnabled() ? NoteGrade.Perfect : CalculateGrade());
                 }
@@ -71,6 +105,7 @@ public class HoldNote : Note
 
     public override bool ShouldMiss()
     {
+        if (shortHoldContactLatched) return false;
         return !IsHolding && base.ShouldMiss();
     }
     
@@ -88,15 +123,18 @@ public class HoldNote : Note
         if (isHolding)
         {
             HoldingFingers.Add(finger);
-            if (!previouslyHolding)
+            if (!previouslyHolding && !shortHoldContactLatched)
             {
                 HoldingStartTime = Game.Time;
+                TryLatchShortHoldContact();
             }
         }
         else
         {
             HoldingFingers.Remove(finger);
         }
+
+        if (IsCleared) return;
 
         if (HoldingFingers.Count == 0 && Game.Time > Model.start_time + JudgmentOffset)
         {
@@ -107,12 +145,45 @@ public class HoldNote : Note
         }
     }
 
+    /// <summary>
+    /// Durationless holds (chart duration ≤ Perfect leniency, e.g. hold_tick=15 ≈ 14ms)
+    /// already grade Perfect on any HeldDuration. Sliding contact that leaves before
+    /// start never reached CalculateGrade; latch that contact and settle at start.
+    /// </summary>
+    private void TryLatchShortHoldContact()
+    {
+        if (!IsDurationlessHold || IsCleared) return;
+
+        var start = Model.start_time + JudgmentOffset;
+        var earlyBy = start - Game.Time;
+        if (earlyBy > ShortHoldEarlyLatchWindow) return;
+
+        shortHoldContactLatched = true;
+        if (Game.Time >= start && Game.State.IsPlaying)
+            SettleFromContact();
+    }
+
+    private void SettleFromContact()
+    {
+        if (IsCleared || !Game.State.IsPlaying) return;
+
+        if (!playedHitSoundAtBegin &&
+            Context.Player.Settings.HoldHitSoundTiming.Let(it =>
+                it == HoldHitSoundTiming.Begin || it == HoldHitSoundTiming.Both))
+        {
+            playedHitSoundAtBegin = true;
+            PlayHitSound();
+        }
+
+        HoldingFingers.Clear();
+        Clear(IsAutoEnabled() ? NoteGrade.Perfect : CalculateGrade());
+    }
+
     public override NoteGrade CalculateGrade()
     {
         var grade = NoteGrade.Miss;
         var rankedGrade = NoteGrade.Miss;
-        // print($"HeldDuration: {HeldDuration}, ModelDuration: {Model.Duration}, HoldingStartTime: {HoldingStartTime}, ModelStartTime: {Model.start_time}");
-        if (HeldDuration > Model.Duration - 0.05f) grade = NoteGrade.Perfect;
+        if (HeldDuration > Model.Duration - PerfectHoldDurationLeniency) grade = NoteGrade.Perfect;
         else if (HeldDuration > Model.Duration * 0.7f) grade = NoteGrade.Great;
         else if (HeldDuration > Model.Duration * 0.5f) grade = NoteGrade.Good;
         else if (HeldDuration > Model.Duration * 0.3f) grade = NoteGrade.Bad;
@@ -132,7 +203,7 @@ public class HoldNote : Note
             {
                 rankedGrade = grade;
                 if (rankedGrade == NoteGrade.Great) GreatGradeWeight = 1.0f - (HeldDuration - Model.Duration * 0.70f) /
-                                       (Model.Duration - 0.050f - Model.Duration * 0.70f);
+                                       (Model.Duration - PerfectHoldDurationLeniency - Model.Duration * 0.70f);
             }
         }
 
