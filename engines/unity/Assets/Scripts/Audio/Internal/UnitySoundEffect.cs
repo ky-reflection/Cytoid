@@ -34,6 +34,8 @@ public class UnitySoundEffect : ISoundEffect
 
     public void Play(bool ignoreListenerPause = false)
     {
+        if (Volume <= 0f) return;
+
         var source = sourceSelector();
         source.ignoreListenerPause = ignoreListenerPause;
         source.clip = audioClip;

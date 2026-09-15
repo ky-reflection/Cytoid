@@ -116,10 +116,15 @@ internal class NativeSfxBackend
 
         public void Play(bool ignoreListenerPause = false)
         {
+            // Play() uses PlayOptions.volume (default 1). SetVolume after Play is too late
+            // on iOS and can leak a full-volume click on Android. Skip at 0 (Android log10).
+            if (volume <= 0f) return;
+
             var sourceIndex = parent.GetNextNativeSourceIndex();
             source = NativeAudio.GetNativeSource(sourceIndex);
-            source.Play(pointer);
-            source.SetVolume(volume);
+            var options = NativeSource.PlayOptions.defaultOptions;
+            options.volume = volume;
+            source.Play(pointer, options);
             isPlaying = true;
         }
 
