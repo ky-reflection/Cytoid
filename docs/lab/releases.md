@@ -6,9 +6,37 @@ Build artifact: `.\engines\unity\build-cytoid-lab.ps1 -Package -KeepLog` → `en
 
 ---
 
-## Unreleased (next after v0.2.3)
+## Unreleased (next after v0.2.4)
 
 _(empty)_
+
+---
+
+## v0.2.4
+
+**Tag:** `cytoid-lab-v0.2.4` · **Title:** Cytoid Lab v0.2.4
+
+### English
+
+Windows 10/11 x64 · Unity **6000.0.75f1** · IL2CPP
+
+- **Core refresh:** integrates public Cytoid/main `83fe3d65`, including experimental flat notes, drag-stack rendering, Drop input guards and play-record updates.
+- **Lab integration:** preserves timeline preview/seek suppression, pooled note IDs, Hold direction overrides, storyboard resync and viewport preferences.
+- **Editor UI:** rounded-corner components tolerate validation before their material is assigned.
+- **UI animation cleanup:** pill-label color/scale tweens are tied to their owner lifetime so rapid scene changes do not leave tweens targeting destroyed labels.
+- **Hard restart:** pauses the old game before pool disposal and the scene transition, preventing updates against destroyed notes during reload.
+- **Timeline drag stacks:** synchronous seek/despawn removes pooled notes from their live stack before clearing their models, preventing a null-reference failure when seeking across overlapping drag chains.
+- **HUD lifecycle:** removes an unavailable built-in slider sprite lookup and stops reading music time before playback starts or after final teardown begins.
+- **Version:** the app UI and binary metadata now report 0.2.4, correcting the stale 0.2.2 string in the previous source.
+
+Extract `CytoidLab.zip` into a folder. Keep your existing `data/` folder when upgrading. The package contains no user levels or private C2 sprite pack.
+
+### 中文
+
+- 同步 public Cytoid/main `83fe3d65`：实验平面音符、拖链堆叠、Drop 输入保护和游玩记录更新。
+- 保留 Lab 时间轴预览/跳转保护、对象池 note ID、Hold 方向覆盖、Storyboard 重同步和窗口设置。
+- 修复 Editor 圆角组件在材质赋值前验证时的空引用。
+- 程序界面与构建版本统一为 0.2.4。升级时保留原 `data/` 文件夹；公开包不含 C2 私有素材。
 
 ---
 

@@ -1,7 +1,7 @@
 # Cytoid Lab
 
 > Branch: `feature/cytoid-player` (historical name; ships **Cytoid Lab**)  
-> Version: **v0.2.2**
+> Version: **v0.2.4**
 
 **Cytoid Lab** is a Windows standalone chart preview and playtest tool built from the Unity core. It is aimed at chart authors and core developers — not at end players (use the main Cytoid app for that).
 
@@ -44,7 +44,7 @@ Bridge / mobile builds are unaffected (`GameEmbedMode.IsBridgeEmbedded` gates La
 
 ## Features
 
-**Current branch (v0.2.2)**
+**v0.2.2**
 - Compile SB writes `storyboard.compiled.json` beside the authoring file
 - Launch update check: red badge on **?**; Help links to the GitHub release
 - HUD hover matches the overlay bar plus padding

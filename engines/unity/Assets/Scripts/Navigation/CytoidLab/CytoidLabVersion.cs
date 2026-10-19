@@ -3,7 +3,7 @@
 /// </summary>
 public static class CytoidLabVersion
 {
-    public const string Version = "0.2.2";
+    public const string Version = "0.2.4";
 
     public static string DisplayName => $"v{Version}";
 }
