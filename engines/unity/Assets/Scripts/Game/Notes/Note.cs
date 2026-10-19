@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -34,6 +34,12 @@ public abstract partial class Note : MonoBehaviour
     private bool dragStackBudgetPending;
     private int dragStackBudgetId;
 
+    /// <summary>Co-located drag stack host; null when not in a multi-note stack.</summary>
+    public DragStackHost DragStack { get; set; }
+
+    /// <summary>True when this note shares visuals/collider with <see cref="DragStack"/>.Primary.</summary>
+    public bool IsDragStackFollower { get; set; }
+
     // For ranked mode: weighted difference between the current timing and the perfect timing
     public float GreatGradeWeight { get; protected set; }
 
@@ -59,6 +65,8 @@ public abstract partial class Note : MonoBehaviour
         armedGrade = NoteGrade.None;
         dragStackBudgetPending = false;
         dragStackBudgetId = 0;
+        IsDragStackFollower = false;
+        DragStack = null;
     
         Chart = Game.Chart.Model;
         Model = Game.Chart.Model.note_map[noteId];
@@ -71,9 +79,14 @@ public abstract partial class Note : MonoBehaviour
         Type = (NoteType) Model.type;
 
         Renderer.OnNoteLoaded();
+        var collider = Renderer.GetCollider();
+        if (collider != null) collider.enabled = true;
+
         MissThreshold = Type.GetDefaultMissThreshold();
         JudgmentOffset = Context.Player.Settings.JudgmentOffset;
 
+        Game.onGameUpdate.RemoveListener(OnGameUpdate);
+        Game.onGameLateUpdate.RemoveListener(OnGameLateUpdate);
         Game.onGameUpdate.AddListener(OnGameUpdate);
         Game.onGameLateUpdate.AddListener(OnGameLateUpdate);
     }
@@ -90,6 +103,7 @@ public abstract partial class Note : MonoBehaviour
         IsCollected = true;
 
         Renderer.OnCollect();
+        Game.ObjectPool.DragStacks.OnNoteCollected(this);
         Game.ObjectPool.CollectNote(this);
         Game.onGameUpdate.RemoveListener(OnGameUpdate);
         Game.onGameLateUpdate.RemoveListener(OnGameLateUpdate);
@@ -107,6 +121,8 @@ public abstract partial class Note : MonoBehaviour
         dragStackBudgetId = 0;
         GreatGradeWeight = default;
         JudgmentOffset = default;
+        DragStack = null;
+        IsDragStackFollower = default;
     }
 
     public virtual void Clear(NoteGrade grade)
@@ -179,51 +195,86 @@ public abstract partial class Note : MonoBehaviour
 
     protected virtual void OnGameUpdate(Game _)
     {
+        if (IsDragStackFollower) return;
+
         if (!IsCleared)
         {
             // Update position
             gameObject.transform.localPosition = Model.CalculatePosition(Game.Chart);
 
-            if (IsArmed)
+            TickJudgmentState();
+        }
+
+        Renderer.OnLateUpdate();
+
+        // Pin followers before LateUpdate so stacked origins match the primary this frame
+        // (lines still lag one Update like unstacked notes; they must not see a pooled pose).
+        if (!(this is DragHeadNote))
+        {
+            SyncDragStackFollowersIfPrimary();
+        }
+    }
+
+    /// <summary>
+    /// Armed / Auto / Miss settlement shared by primary Update and stack followers.
+    /// </summary>
+    public void TickStackFollowerJudgment()
+    {
+        if (IsCleared || IsCollected) return;
+        TickJudgmentState();
+    }
+
+    private void TickJudgmentState()
+    {
+        if (IsArmed)
+        {
+            if (Game.Time >= Model.start_time + JudgmentOffset)
             {
-                if (Game.Time >= Model.start_time + JudgmentOffset)
+                using (Game.PlayRecordRecorder?.PushJudgmentContext(
+                    GamePlayRecordWire.CauseTriggerTick, null, null))
                 {
                     Clear(armedGrade);
                 }
             }
-            else
+        }
+        else
+        {
+            // Autoplay
+            if (IsAutoEnabled())
             {
-                // Autoplay — Cytoid Lab: skip during timeline scrub/resync so Auto does not call
-                // UpdateFinger (clears timeline hold state) or Clear notes mid-preview (RC-7, RC-10).
-                // SuppressTimelineGameplayMutations lives on Game.CytoidLab; false in normal play.
-                if (!Game.SuppressTimelineGameplayMutations && IsAutoEnabled())
+                if (!Game.SuppressTimelineGameplayMutations && TimeUntilStart < 0)
                 {
-                    if (TimeUntilStart < 0)
+                    if (this is HoldNote)
                     {
-                        if (this is HoldNote)
-                        {
-                            ((HoldNote) this).UpdateFinger(0, true);
-                        }
-                        else
+                        ((HoldNote) this).UpdateFinger(0, true);
+                    }
+                    else
+                    {
+                        using (Game.PlayRecordRecorder?.PushJudgmentContext(
+                            GamePlayRecordWire.CauseAutoplay, null, null))
                         {
                             Clear(NoteGrade.Perfect);
                         }
                     }
                 }
+            }
 
-                // Miss while paused/scrubbing would clear notes before visual state is written.
-                if (!Game.SuppressTimelineGameplayMutations && ShouldMiss())
+            // Check removable
+            if (!Game.SuppressTimelineGameplayMutations && ShouldMiss())
+            {
+                using (Game.PlayRecordRecorder?.PushJudgmentContext(
+                    GamePlayRecordWire.CauseMiss, null, null))
                 {
                     Clear(NoteGrade.Miss);
                 }
             }
         }
-
-        Renderer.OnLateUpdate();
     }
 
     protected virtual void OnGameLateUpdate(Game _)
     {
+        if (IsDragStackFollower) return;
+
         if (NextNoteModel != null)
         {
             if (Game.SpawnedNotes.ContainsKey(NextNoteModel.id))
@@ -246,9 +297,15 @@ public abstract partial class Note : MonoBehaviour
             var position = transform.localPosition;
             // Unspawned next notes must use CalculatePosition so Storyboard Override applies
             // (baked .position would aim drag lines/heads at the pre-override chart coord).
-            var nextPosition = hasNextNote
-                ? nextNote.transform.localPosition
-                : NextNoteModel.CalculatePosition(Game.Chart);
+            Vector3 nextPosition;
+            if (hasNextNote)
+            {
+                nextPosition = nextNote.StackVisualLocalPosition();
+            }
+            else
+            {
+                nextPosition = NextNoteModel.CalculatePosition(Game.Chart);
+            }
 
             if (position == nextPosition)
                 Model.rotation = Vector3.zero;
@@ -269,6 +326,20 @@ public abstract partial class Note : MonoBehaviour
         if (Model.Override.RotZ != null) rotation.z = Model.Override.RotZ.Value;
 
         gameObject.transform.localEulerAngles = Model.rotation = rotation;
+
+        // DragHead syncs after it finishes moving in its LateUpdate override.
+        if (!(this is DragHeadNote))
+        {
+            SyncDragStackFollowersIfPrimary();
+        }
+    }
+
+    protected void SyncDragStackFollowersIfPrimary()
+    {
+        if (DragStack != null && DragStack.IsPrimary(this))
+        {
+            DragStack.TickFollowers();
+        }
     }
 
     public virtual bool ShouldMiss()
@@ -295,9 +366,10 @@ public abstract partial class Note : MonoBehaviour
     }
 
     /// <summary>
-    /// Handles passive contact from an already-down finger. A valid early hit is armed
-    /// and resolves at the effective perfect time; a hit at or after that time resolves
-    /// immediately. Misses retain the existing immediate settlement behavior.
+    /// Handles passive contact from an already-down finger. A valid hit is recorded
+    /// (armed) with its contact grade; settlement happens when the contacting finger
+    /// lifts (<see cref="SettleArmed"/>) or at the note's effective perfect time,
+    /// whichever comes first. Misses retain immediate settlement.
     /// </summary>
     public virtual bool OnTouchDeferred(Vector2 screenPos)
     {
@@ -305,7 +377,7 @@ public abstract partial class Note : MonoBehaviour
 
         var grade = GetTouchGrade();
         if (grade == NoteGrade.None) return false;
-        if (grade == NoteGrade.Miss || Game.Time >= Model.start_time + JudgmentOffset)
+        if (grade == NoteGrade.Miss)
         {
             Clear(grade);
         }
@@ -315,6 +387,17 @@ public abstract partial class Note : MonoBehaviour
             armedGrade = grade;
         }
         return true;
+    }
+
+    /// <summary>
+    /// Judges an armed note immediately with its recorded contact grade -- the finger
+    /// that armed it lifted before the note's perfect point. No-ops for notes that
+    /// already settled at their trigger points or were pool-reused since.
+    /// </summary>
+    public void SettleArmed()
+    {
+        if (!IsArmed) return;
+        Clear(armedGrade);
     }
 
     /// <summary>
@@ -398,7 +481,58 @@ public abstract partial class Note : MonoBehaviour
 
     public bool DoesCollide(Vector2 pos)
     {
+        if (IsDragStackFollower && DragStack?.Primary != null)
+        {
+            return DragStack.Primary.DoesCollide(pos);
+        }
+
         return Renderer.DoesCollide(pos);
+    }
+
+    /// <summary>
+    /// World/local pose used for stacking: followers are pinned to the primary.
+    /// </summary>
+    public Vector3 StackVisualLocalPosition()
+    {
+        if (IsDragStackFollower && DragStack?.Primary != null)
+            return DragStack.Primary.transform.localPosition;
+        return transform.localPosition;
+    }
+
+    public void BecomeDragStackFollower()
+    {
+        if (IsDragStackFollower) return;
+        IsDragStackFollower = true;
+        Game.onGameUpdate.RemoveListener(OnGameUpdate);
+        Game.onGameLateUpdate.RemoveListener(OnGameLateUpdate);
+        SetDragStackVisualsEnabled(false);
+    }
+
+    public void PromoteToDragStackPrimary()
+    {
+        IsDragStackFollower = false;
+        SetDragStackVisualsEnabled(true);
+        Game.onGameUpdate.RemoveListener(OnGameUpdate);
+        Game.onGameLateUpdate.RemoveListener(OnGameLateUpdate);
+        Game.onGameUpdate.AddListener(OnGameUpdate);
+        Game.onGameLateUpdate.AddListener(OnGameLateUpdate);
+        // Restore Ring/Fill/Mask this frame; waiting for the next Update leaves a blank host.
+        Renderer?.OnLateUpdate();
+    }
+
+    private void SetDragStackVisualsEnabled(bool enabled)
+    {
+        Renderer?.OnDragStackVisibilityChanged(enabled);
+        var colliders = GetComponentsInChildren<Collider2D>(true);
+        for (var i = 0; i < colliders.Length; i++) colliders[i].enabled = enabled;
+
+        if (!enabled)
+        {
+            var sprites = GetComponentsInChildren<SpriteRenderer>(true);
+            for (var i = 0; i < sprites.Length; i++) sprites[i].enabled = false;
+            var masks = GetComponentsInChildren<SpriteMask>(true);
+            for (var i = 0; i < masks.Length; i++) masks[i].enabled = false;
+        }
     }
 
     public virtual bool IsAutoEnabled()

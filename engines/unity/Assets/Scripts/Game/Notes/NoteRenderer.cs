@@ -26,6 +26,8 @@ public class NoteRenderer
 
     public virtual void OnClear(NoteGrade grade) => Expression.Empty();
 
+    public virtual void OnDragStackVisibilityChanged(bool visible) => Expression.Empty();
+
     public bool DoesCollide(Vector2 pos)
     {
         return Collider.OverlapPoint(pos);

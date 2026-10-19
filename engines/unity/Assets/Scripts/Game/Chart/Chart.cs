@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -28,6 +28,21 @@ public class Chart
     public int MaxSamePageNonDragTypeNoteCount { get; }
     public int MaxSamePageDragTypeNoteCount { get; }
     public int MaxSamePageHoldTypeNoteCount { get; }
+
+    /// <summary>note id → drag stack id (only multi-note stacks, size ≥ 2).</summary>
+    public Dictionary<int, int> NoteIdToDragStackId { get; } = new Dictionary<int, int>();
+
+    /// <summary>stack id → note ids sorted ascending (list-order / DragCoHit order).</summary>
+    public Dictionary<int, List<int>> DragStackMembers { get; } = new Dictionary<int, List<int>>();
+
+    /// <summary>Peak distinct drag-stack hosts on one page (ClearDrag pool floor after stacking).</summary>
+    public int MaxSamePageDragStackHostCount { get; private set; }
+
+    /// <summary>
+    /// Peak distinct drag-line GOs on one page after stack sharing.
+    /// Counts unshared edges plus one line per unique stacked endpoint pair.
+    /// </summary>
+    public int MaxSamePageDragLineCount { get; private set; }
     
     private readonly float baseSize;
     private readonly float horizontalRatio;
@@ -208,8 +223,9 @@ public class Chart
             if (note.type == (int) NoteType.DragHead || note.type == (int) NoteType.DragChild || 
                 note.type == (int) NoteType.CDragHead || note.type == (int) NoteType.CDragChild)
                 note.intro_time = note.start_time - 1.175f / speed;
-            else if (note.type == (int) NoteType.DropClick || note.type == (int) NoteType.DropDrag)
+            else if (type == NoteType.DropClick || type == NoteType.DropDrag)
             {
+                // Drop notes enter five page tick spans before landing, including tempo changes.
                 var dropStartTick = (float) (note.tick - (page.end_tick - page.start_tick) * 5.0);
                 note.intro_time = ConvertToTime(dropStartTick);
             }
@@ -236,8 +252,6 @@ public class Chart
                     note.tint = note.direction == 1 ? 0.94f : 1.06f;
                     break;
                 case NoteType.LongHold:
-                    note.tint = note.direction == 1 ? 0.94f : 1.06f;
-                    break;
                 case NoteType.DropClick:
                 case NoteType.DropDrag:
                     note.tint = note.direction == 1 ? 0.94f : 1.06f;
@@ -266,6 +280,31 @@ public class Chart
                     note.tint = note.direction == 1 ? 1.00f : 1.30f;
                     break;
             }
+    }
+
+    /// <summary>
+    /// Groups co-located drag children after storyboard parse. Call once from
+    /// <see cref="Game.Initialize"/> so note-controller signatures are already resolved.
+    /// Charts without storyboard pass a null signature map (uncontrolled notes only).
+    /// Notes touched by a NoteController stay on the per-note path; ids are unchanged.
+    /// </summary>
+    public void ApplyDragStacks(IReadOnlyDictionary<int, string> storyboardSignatures = null)
+    {
+        var plan = DragStackPlanner.Build(Model, storyboardSignatures);
+        NoteIdToDragStackId.Clear();
+        foreach (var pair in plan.NoteIdToStackId)
+        {
+            NoteIdToDragStackId[pair.Key] = pair.Value;
+        }
+
+        DragStackMembers.Clear();
+        foreach (var pair in plan.StackMembers)
+        {
+            DragStackMembers[pair.Key] = pair.Value;
+        }
+
+        MaxSamePageDragStackHostCount = plan.MaxSamePageDragStackHostCount;
+        MaxSamePageDragLineCount = plan.MaxSamePageDragLineCount;
     }
 
     private float ConvertToTime(float tick)

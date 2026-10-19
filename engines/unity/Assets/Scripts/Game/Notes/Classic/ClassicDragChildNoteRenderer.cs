@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class ClassicDragChildNoteRenderer : ClassicNoteRenderer
 {
@@ -19,6 +19,12 @@ public class ClassicDragChildNoteRenderer : ClassicNoteRenderer
 
     protected override void UpdateComponentStates()
     {
+        if (Note.IsDragStackFollower)
+        {
+            Ring.enabled = Fill.enabled = SpriteMask.enabled = false;
+            SetNoteIdVisible(false);
+            return;
+        }
         Ring.enabled = false;
 
         var showNoteId = false;

@@ -8,6 +8,7 @@ public partial class DragHeadNote : Note
 {
     protected override NoteRenderer CreateRenderer()
     {
+        if (Game.Config.UseFlatNoteDesign) return new FlatDragHeadNoteRenderer(this);
         return Game.Config.UseClassicStyle
             ? (NoteRenderer) new ClassicDragHeadNoteRenderer(this)
             : throw new NotSupportedException();
@@ -28,6 +29,17 @@ public partial class DragHeadNote : Note
     private Note toNote;
 
     public bool IsCDrag => Model.type == (int) NoteType.CDragHead;
+
+    // The travelling indicator can appear on an early clear, before intro_time.
+    public bool IsChainEndPending(Game game) =>
+        !game.State.IsJudged(EndNoteModel.id) || game.Time < EndNoteModel.start_time;
+
+    public bool IsChainActive(Game game) =>
+        game.Time >= Model.intro_time && IsChainEndPending(game);
+
+    // CDrag's anchored head ID follows the click window, independently of the chain.
+    public bool IsHeadNoteIdActive(Game game) => !IsCleared &&
+        game.Time >= Model.intro_time && game.Time <= Model.end_time + MissThreshold;
 
     public override void SetData(int noteId)
     {
@@ -95,10 +107,10 @@ public partial class DragHeadNote : Note
             while (edgeSteps++ < maxEdgeSteps)
             {
                 var fromPos = (hasFromNote && fromNote != this)
-                    ? fromNote.transform.localPosition
+                    ? fromNote.StackVisualLocalPosition()
                     : FromNoteModel.CalculatePosition(Game.Chart);
                 var toPos = hasToNote
-                    ? toNote.transform.localPosition
+                    ? toNote.StackVisualLocalPosition()
                     : ToNoteModel.CalculatePosition(Game.Chart);
 
                 var span = ToNoteModel.start_time - FromNoteModel.start_time;
@@ -143,6 +155,7 @@ public partial class DragHeadNote : Note
                     {
                         Clear(NoteGrade.Miss);
                     }
+                    SyncDragStackFollowersIfPrimary();
                     return;
                 }
 
@@ -167,6 +180,8 @@ public partial class DragHeadNote : Note
             FromNoteModel = Model;
             ToNoteModel = StartToNoteModel;
         }
+
+        SyncDragStackFollowersIfPrimary();
     }
 
     // SYNC-WARNING: DropDrag judgment is a verbatim copy of DragHeadNote's CanHandleTouch, CalculateGrade,

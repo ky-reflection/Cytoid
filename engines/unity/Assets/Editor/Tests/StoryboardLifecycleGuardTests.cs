@@ -147,8 +147,10 @@ public class StoryboardLifecycleGuardTests
         var body = MethodBody(
             Path.Combine(Application.dataPath, "Scripts/Storyboard/Videos/VideoRenderer.cs"),
             "public override void Dispose()",
-            "private void UnsubscribePrepareCompleted");
-        Assert.That(body, Does.Contain("if (ownsResources)"));
+            "public override void Update(");
+        Assert.That(body, Does.Contain("if (ownsVideoObjects)"));
+        Assert.That(body, Does.Contain("VideoPlayer.loopPointReached -= OnLoopPointReached"));
+        Assert.That(body, Does.Contain("RenderTexture.Release()"));
         Assert.That(body, Does.Contain("base.Dispose()"));
     }
 

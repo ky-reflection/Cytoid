@@ -15,6 +15,7 @@ public partial class HoldNote : Note
 
     protected override NoteRenderer CreateRenderer()
     {
+        if (Game.Config.UseFlatNoteDesign) return new FlatHoldNoteRenderer(this);
         return Game.Config.UseClassicStyle
             ? (NoteRenderer) new ClassicHoldNoteRenderer(this)
             : throw new NotSupportedException();
