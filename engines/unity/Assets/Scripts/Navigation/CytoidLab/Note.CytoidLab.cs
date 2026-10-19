@@ -9,6 +9,8 @@ public partial class Note
         IsCollected = true;
 
         Renderer?.OnCollect();
+        // Remove membership while Model is still valid, just like normal collection.
+        Game.ObjectPool.DragStacks.OnNoteCollected(this);
         Game.ObjectPool.CollectNote(this);
         Game.onGameUpdate.RemoveListener(OnGameUpdate);
         Game.onGameLateUpdate.RemoveListener(OnGameLateUpdate);
@@ -20,6 +22,12 @@ public partial class Note
         Page = default;
         MissThreshold = default;
         IsCleared = default;
+        IsArmed = false;
+        armedGrade = NoteGrade.None;
+        dragStackBudgetPending = false;
+        dragStackBudgetId = 0;
+        DragStack = null;
+        IsDragStackFollower = false;
         GreatGradeWeight = default;
         JudgmentOffset = default;
     }

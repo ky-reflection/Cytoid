@@ -107,7 +107,8 @@ public class CytoidLabHudController : MonoBehaviour
 
     private void Update()
     {
-        if (game == null || !game.IsLoaded) return;
+        if (game == null || !game.IsLoaded || game.State == null ||
+            !game.State.IsStarted || game.State.IsReadyToExit) return;
 
         if (timeSlider != null && !isSliderInteracting && game.State.IsPlaying)
         {
@@ -431,7 +432,6 @@ public class CytoidLabHudController : MonoBehaviour
         var handleRect = handle.GetComponent<RectTransform>();
         handleRect.sizeDelta = new Vector2(TimelineHandleSize, TimelineHitHeight);
         var handleImage = handle.AddComponent<Image>();
-        handleImage.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
         handleImage.color = Color.white;
 
         var handleVisual = CreateUiObject("HandleVisual", handle.transform);

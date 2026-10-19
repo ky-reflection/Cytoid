@@ -21,7 +21,9 @@ public class ImageWithRoundedCorners : MonoBehaviour {
 	}
 
 	private void Refresh(){
-		var rect = ((RectTransform) transform).rect;
+		// AddComponent invokes OnValidate before the caller assigns the material.
+		if (material == null || !(transform is RectTransform rectTransform)) return;
+		var rect = rectTransform.rect;
 		material.SetVector(Props, new Vector4(rect.width, rect.height, radius, 0));
 		material.SetFloat(BorderWidthProp, borderWidth);
 	}

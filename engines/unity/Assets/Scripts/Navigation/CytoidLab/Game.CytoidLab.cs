@@ -57,6 +57,8 @@ public partial class Game
     public void HardReloadPlayfield()
     {
         if (!IsLoaded) return;
+        // Stop Update before Retry disposes the pool and waits for the scene transition.
+        if (State != null && State.IsPlaying) Pause();
         Retry();
     }
 
