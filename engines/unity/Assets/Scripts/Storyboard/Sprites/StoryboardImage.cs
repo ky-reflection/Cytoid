@@ -9,8 +9,10 @@ namespace Cytoid.Storyboard.Sprites
         {
             base.UpdateGeometry();
             if (canvas == null || canvas.rootCanvas.renderMode != RenderMode.ScreenSpaceCamera) return;
+            var camera = canvas.rootCanvas.worldCamera;
+            if (camera == null || camera.orthographic) return;
 
-            // Screen-space Canvas culling can reject depth-transformed sprites that
+            // Perspective Canvas culling can reject depth-transformed sprites that
             // still project into view. Keep their vertices and bounds center intact,
             // but give the native culling test a conservative extent.
             var mesh = workerMesh;
