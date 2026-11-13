@@ -24,6 +24,9 @@ public sealed class GameState
 
     public bool IsFailed { get; set; }
     public HashSet<Mod> Mods { get; }
+    // Chain Timing results are local-only even though they reuse Practice scoring.
+    public bool IsChainTimingPractice { get; }
+    public int ChainTimingTimingSampleCount { get; private set; }
     public SecuredDouble MaxHealth { get; } = new SecuredDouble();
     public int NoteCount { get; }
 
@@ -48,17 +51,19 @@ public sealed class GameState
 
     [AvailableOnComplete]
     public int EarlyCount => OnCompleteGuard(
-        Judgements.Values.Count(it => it.Grade != NoteGrade.Perfect && it.Grade != NoteGrade.Miss && it.Error < 0)
+        IsChainTimingPractice ? chainTimingEarlyCount :
+            Judgements.Values.Count(it => it.Grade != NoteGrade.Perfect && it.Grade != NoteGrade.Miss && it.Error < 0)
     );
 
     [AvailableOnComplete]
     public int LateCount => OnCompleteGuard(
-        Judgements.Values.Count(it => it.Grade != NoteGrade.Perfect && it.Grade != NoteGrade.Miss && it.Error > 0)
+        IsChainTimingPractice ? chainTimingLateCount :
+            Judgements.Values.Count(it => it.Grade != NoteGrade.Perfect && it.Grade != NoteGrade.Miss && it.Error > 0)
     );
 
     [AvailableOnComplete]
     public double AverageTimingError => OnCompleteGuard(
-        Judgements.Values.Sum(it => it.Error) / Judgements.Count
+        IsChainTimingPractice ? chainTimingMeanError : Judgements.Values.Sum(it => it.Error) / Judgements.Count
     );
 
     [AvailableOnComplete]
@@ -67,6 +72,8 @@ public sealed class GameState
         get
         {
             OnCompleteGuard();
+            if (IsChainTimingPractice)
+                return ChainTimingTimingSampleCount == 0 ? 0 : Math.Sqrt(chainTimingSquaredErrorSum / ChainTimingTimingSampleCount);
             var difference = 0.0;
             Judgements.Values.ForEach(it => difference += Math.Pow(AverageTimingError - it.Error, 2));
             return Math.Sqrt(difference / Judgements.Count);
@@ -78,6 +85,10 @@ public sealed class GameState
     private readonly Dictionary<NoteGrade, int> gradeCounts = new Dictionary<NoteGrade, int>();
     private readonly double noteScoreMultiplierFactor;
     private double accumulatedAccuracy;
+    private int chainTimingEarlyCount;
+    private int chainTimingLateCount;
+    private double chainTimingMeanError;
+    private double chainTimingSquaredErrorSum;
 
     private static readonly HashSet<Mod> AllowedTierMods = new HashSet<Mod>
     {
@@ -99,6 +110,7 @@ public sealed class GameState
         DifficultyLevel = Level.Meta.GetDifficultyLevel(Difficulty.Id);
         Mode = mode;
         Mods = new HashSet<Mod>(mods);
+        IsChainTimingPractice = mode == GameMode.Practice && Mods.Contains(Mod.ChainTiming);
 
         NoteCount = game.Chart.Model.note_list.Count;
         game.Chart.Model.note_list.ForEach(it => Judgements[it.id] = new NoteJudgement());
@@ -175,6 +187,19 @@ public sealed class GameState
             it.Grade = grade;
             it.Error = error;
         });
+
+        if (IsChainTimingPractice && note.ChainTimingTimingError is double contactError)
+        {
+            ChainTimingTimingSampleCount++;
+            var difference = contactError - chainTimingMeanError;
+            chainTimingMeanError += difference / ChainTimingTimingSampleCount;
+            chainTimingSquaredErrorSum += difference * (contactError - chainTimingMeanError);
+            if (grade != NoteGrade.Perfect)
+            {
+                if (contactError < 0) chainTimingEarlyCount++;
+                if (contactError > 0) chainTimingLateCount++;
+            }
+        }
 
         if (Mode == GameMode.Practice)
         {

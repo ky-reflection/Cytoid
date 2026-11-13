@@ -241,6 +241,18 @@ public class Game : MonoBehaviour
             mods.Contains(Mod.Fast) ? 1.5f : (mods.Contains(Mod.Slow) ? 0.75f : 1),
             camera.orthographicSize
         );
+        if (mods.Contains(Mod.ChainTiming))
+        {
+            if ((mode == GameMode.Standard || mode == GameMode.Practice) &&
+                Chart.Model.note_list.Any(note => ChainTimingJudgment.Supports((NoteType)note.type, note.Duration)))
+            {
+                mode = GameMode.Practice;
+            }
+            else
+            {
+                mods.Remove(Mod.ChainTiming);
+            }
+        }
         ChartLength = Chart.Model.note_list.Max(it => it.end_time);
         foreach (var type in (NoteType[]) Enum.GetValues(typeof(NoteType)))
         {
@@ -344,7 +356,7 @@ public class Game : MonoBehaviour
         GameStartedOrResumedTimestamp = UnityEngine.Time.realtimeSinceStartup;
         State.IsStarted = true;
         State.IsPlaying = true;
-        GamePlayEventRecorder.Begin(this);
+        if (!State.IsChainTimingPractice) GamePlayEventRecorder.Begin(this);
         LayoutStaticizer.Staticize(levelInfoParent.transform);
         LayoutStaticizer.Staticize(modHolderParent.transform);
         onGameStarted.Invoke(this);
