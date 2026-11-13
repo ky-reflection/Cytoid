@@ -25,6 +25,14 @@ public abstract class Note : MonoBehaviour
     public float MissThreshold { get; set; }
 
     public bool IsCleared { get; private set; }
+    internal bool UsesChainTimingJudgment { get; private set; }
+    internal bool UsesChainTimingDrag => UsesChainTimingJudgment && (Type == NoteType.DragHead || Type == NoteType.DragChild);
+    internal long ChainTimingStart { get; private set; }
+    internal long ChainTimingEnd { get; private set; }
+    internal long ChainTimingNow => ChainTimingJudgment.ToMicroseconds(Game.Time);
+    internal double? ChainTimingTimingError { get; private set; }
+    private long ChainTimingDeadline => ChainTimingStart + (UsesChainTimingDrag ? ChainTimingJudgment.DragClose : ChainTimingJudgment.ClickClose);
+
     public bool IsArmed { get; private set; }
     private NoteGrade armedGrade = NoteGrade.None;
     /// <summary>
@@ -84,6 +92,13 @@ public abstract class Note : MonoBehaviour
 
         MissThreshold = Type.GetDefaultMissThreshold();
         JudgmentOffset = Context.Player.Settings.JudgmentOffset;
+        UsesChainTimingJudgment = Game.State.IsChainTimingPractice && ChainTimingJudgment.Supports(Type, Model.Duration);
+        if (UsesChainTimingJudgment)
+        {
+            ChainTimingStart = ChainTimingJudgment.ToMicroseconds((double)Model.start_time + JudgmentOffset);
+            ChainTimingEnd = ChainTimingJudgment.ToMicroseconds((double)Model.end_time + JudgmentOffset);
+            if (Type == NoteType.Hold && ChainTimingEnd <= ChainTimingStart) UsesChainTimingJudgment = false;
+        }
 
         Game.onGameUpdate.RemoveListener(OnGameUpdate);
         Game.onGameLateUpdate.RemoveListener(OnGameLateUpdate);
@@ -121,6 +136,8 @@ public abstract class Note : MonoBehaviour
         dragStackBudgetId = 0;
         GreatGradeWeight = default;
         JudgmentOffset = default;
+        UsesChainTimingJudgment = false;
+        ChainTimingTimingError = null;
         DragStack = null;
         IsDragStackFollower = default;
     }
@@ -239,13 +256,14 @@ public abstract class Note : MonoBehaviour
         else
         {
             // Autoplay
-            if (IsAutoEnabled())
+            var auto = IsAutoEnabled();
+            if (auto)
             {
-                if (TimeUntilStart < 0)
+                if (UsesChainTimingJudgment ? ChainTimingNow >= ChainTimingStart : TimeUntilStart < 0)
                 {
-                    if (this is HoldNote)
+                    if (this is HoldNote hold)
                     {
-                        ((HoldNote) this).UpdateFinger(0, true);
+                        if (!UsesChainTimingJudgment || !hold.IsHolding) hold.UpdateFinger(0, true);
                     }
                     else
                     {
@@ -259,7 +277,7 @@ public abstract class Note : MonoBehaviour
             }
 
             // Check removable
-            if (ShouldMiss())
+            if ((!UsesChainTimingJudgment || !auto) && ShouldMiss())
             {
                 using (Game.PlayRecordRecorder?.PushJudgmentContext(
                     GamePlayRecordWire.CauseMiss, null, null))
@@ -343,7 +361,44 @@ public abstract class Note : MonoBehaviour
 
     public virtual bool ShouldMiss()
     {
+        if (UsesChainTimingJudgment) return !IsArmed && ChainTimingNow >= ChainTimingDeadline;
         return Game.Time - (Model.start_time + JudgmentOffset) > MissThreshold;
+    }
+
+    internal bool IsWithinNoteWindow => UsesChainTimingJudgment
+        ? !IsCleared && HasEmerged &&
+          (this is HoldNote hold ? hold.ChainTimingColliderActiveForHold : ChainTimingNow < ChainTimingDeadline)
+        : HasEmerged && Game.Time <= Model.end_time + MissThreshold;
+
+    protected bool CanHandleNativeDragTouch()
+    {
+        var until = Model.start_time - Game.Time;
+        return until <= 0.31f &&
+               (Model.page_index <= Game.Chart.CurrentPageId || until <= Page.Duration / 2f);
+    }
+
+    protected NoteGrade CalculateNativeDragGrade(float early, float late)
+    {
+        var until = TimeUntilStart + JudgmentOffset;
+        if (until >= 0) return until < early ? NoteGrade.Perfect : NoteGrade.None;
+        return -until < late ? NoteGrade.Perfect : NoteGrade.Miss;
+    }
+
+    internal virtual bool CanRepresentNativeDrag() => true;
+
+    private NoteGrade ChainTimingTouchGrade(long delta) =>
+        UsesChainTimingDrag ? ChainTimingJudgment.Drag(delta) : ChainTimingJudgment.Click(delta);
+
+    private bool HandleChainTimingTouch()
+    {
+        if (IsAutoEnabled()) return false;
+        var delta = ChainTimingNow - ChainTimingStart;
+        var grade = ChainTimingTouchGrade(delta);
+        if (grade == NoteGrade.None) return false;
+
+        ChainTimingTimingError = delta / 1_000_000d;
+        Clear(grade);
+        return true;
     }
 
     public void OnDestroy()
@@ -373,6 +428,7 @@ public abstract class Note : MonoBehaviour
     public virtual bool OnTouchDeferred(Vector2 screenPos)
     {
         if (!CanHandleTouch() || IsArmed) return false;
+        if (UsesChainTimingDrag) return HandleChainTimingTouch();
 
         var grade = GetTouchGrade();
         if (grade == NoteGrade.None) return false;
@@ -414,6 +470,8 @@ public abstract class Note : MonoBehaviour
     /// </summary>
     public NoteGrade GetTouchGrade()
     {
+        if (UsesChainTimingJudgment && Type != NoteType.Hold)
+            return IsAutoEnabled() ? NoteGrade.None : ChainTimingTouchGrade(ChainTimingNow - ChainTimingStart);
         if (IsAutoEnabled()) return NoteGrade.Perfect;
         if (ShouldMiss()) return NoteGrade.Miss;
         return CalculateGrade();
@@ -426,6 +484,7 @@ public abstract class Note : MonoBehaviour
     public virtual bool TryClear()
     {
         if (IsCleared || IsArmed) return false;
+        if (UsesChainTimingJudgment && Type != NoteType.Hold) return HandleChainTimingTouch();
         var grade = GetTouchGrade();
         if (grade != NoteGrade.None) Clear(grade);
         return IsCleared;
@@ -433,6 +492,7 @@ public abstract class Note : MonoBehaviour
 
     public virtual NoteGrade CalculateGrade()
     {
+        if (UsesChainTimingJudgment) return ChainTimingTouchGrade(ChainTimingNow - ChainTimingStart);
         var grade = NoteGrade.None;
         var timeUntil = TimeUntilStart + JudgmentOffset;
 

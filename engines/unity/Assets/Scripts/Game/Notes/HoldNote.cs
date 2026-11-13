@@ -10,6 +10,16 @@ public class HoldNote : Note
     public List<int> HoldingFingers { get; } = new List<int>(2);
 
     private bool playedHitSoundAtBegin;
+    private long chainTimingBoundAt;
+    private long? chainTimingPausedAt;
+
+    private long ChainTimingClose => ChainTimingJudgment.HoldClose(ChainTimingStart, ChainTimingEnd);
+    internal bool ChainTimingColliderActiveForHold =>
+        ChainTimingNow < (IsHolding || chainTimingPausedAt.HasValue || IsAutoEnabled() ? ChainTimingEnd : ChainTimingClose);
+
+    internal bool CanBindFinger =>
+        !UsesChainTimingJudgment || (!IsAutoEnabled() && !chainTimingPausedAt.HasValue &&
+            (IsHolding ? ChainTimingNow < ChainTimingEnd : ChainTimingJudgment.CanStartHold(ChainTimingNow, ChainTimingStart, ChainTimingEnd)));
     
     public bool IsHolding => HoldingFingers.Count > 0;
 
@@ -30,6 +40,8 @@ public class HoldNote : Note
         HoldProgress = default;
         HoldingFingers.Clear();
         playedHitSoundAtBegin = false;
+        chainTimingBoundAt = default;
+        chainTimingPausedAt = null;
         base.Collect();
     }
 
@@ -38,7 +50,11 @@ public class HoldNote : Note
         base.OnGameUpdate(_);
         if (IsHolding)
         {
-            if (Game.Time >= Model.start_time + JudgmentOffset)
+            if (UsesChainTimingJudgment)
+            {
+                HeldDuration = ChainTimingHeldTime(ChainTimingNow) / 1_000_000f;
+            }
+            else if (Game.Time >= Model.start_time + JudgmentOffset)
             {
                 HeldDuration = Game.Time - Mathf.Max(Model.start_time + JudgmentOffset, HoldingStartTime);
             }
@@ -57,7 +73,11 @@ public class HoldNote : Note
             }
 
             // Already completed?
-            if (Game.Time >= Model.end_time + JudgmentOffset)
+            if (UsesChainTimingJudgment)
+            {
+                if (ChainTimingNow >= ChainTimingEnd) FinishChainTimingHold(ChainTimingEnd);
+            }
+            else if (Game.Time >= Model.end_time + JudgmentOffset)
             {
                 HoldingFingers.Clear();
                 if (Game.Time > Model.start_time + JudgmentOffset && Game.State.IsPlaying)
@@ -74,6 +94,8 @@ public class HoldNote : Note
 
     public override bool ShouldMiss()
     {
+        if (UsesChainTimingJudgment)
+            return !IsHolding && !chainTimingPausedAt.HasValue && ChainTimingNow >= ChainTimingClose;
         return !IsHolding && base.ShouldMiss();
     }
     
@@ -86,6 +108,26 @@ public class HoldNote : Note
 
     public void UpdateFinger(int finger, bool isHolding)
     {
+        if (UsesChainTimingJudgment)
+        {
+            if (!Game.State.IsPlaying || IsCleared) return;
+            if (isHolding)
+            {
+                if (HoldingFingers.Contains(finger)) return;
+                if (!IsHolding)
+                {
+                    HoldingStartTime = Game.Time;
+                    chainTimingBoundAt = ChainTimingNow;
+                }
+                HoldingFingers.Add(finger);
+            }
+            else if (HoldingFingers.Remove(finger) && !IsHolding)
+            {
+                ReleaseChainTimingHold(ChainTimingNow);
+            }
+            return;
+        }
+
         var previouslyHolding = IsHolding;
         
         if (isHolding)
@@ -110,8 +152,45 @@ public class HoldNote : Note
         }
     }
 
+    internal void SuspendChainTimingHold()
+    {
+        if (UsesChainTimingJudgment && IsHolding) chainTimingPausedAt = ChainTimingNow;
+    }
+
+    internal void ResumeChainTimingHold()
+    {
+        if (!chainTimingPausedAt.HasValue) return;
+        var pausedAt = chainTimingPausedAt.Value;
+        chainTimingPausedAt = null;
+        if (!IsHolding) ReleaseChainTimingHold(pausedAt);
+    }
+
+    private void ReleaseChainTimingHold(long time)
+    {
+        if (time >= ChainTimingStart)
+        {
+            FinishChainTimingHold(time);
+        }
+        else
+        {
+            HoldingStartTime = float.MaxValue;
+            HeldDuration = 0;
+        }
+    }
+
+    private long ChainTimingHeldTime(long time) => ChainTimingJudgment.HeldTime(ChainTimingStart, ChainTimingEnd, chainTimingBoundAt, time);
+
+    private void FinishChainTimingHold(long time)
+    {
+        var held = ChainTimingHeldTime(time);
+        HeldDuration = held / 1_000_000f;
+        HoldingFingers.Clear();
+        Clear(IsAutoEnabled() ? NoteGrade.Perfect : ChainTimingJudgment.Hold(ChainTimingEnd - ChainTimingStart, held));
+    }
+
     public override NoteGrade CalculateGrade()
     {
+        if (UsesChainTimingJudgment) return ChainTimingJudgment.Hold(ChainTimingEnd - ChainTimingStart, ChainTimingHeldTime(ChainTimingNow));
         var grade = NoteGrade.Miss;
         var rankedGrade = NoteGrade.Miss;
         // print($"HeldDuration: {HeldDuration}, ModelDuration: {Model.Duration}, HoldingStartTime: {HoldingStartTime}, ModelStartTime: {Model.start_time}");

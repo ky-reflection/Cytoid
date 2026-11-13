@@ -90,6 +90,8 @@ public class InputController : MonoBehaviour
     private readonly List<Note> hitCandidates = new List<Note>();
     private readonly List<Note> clusterScratch = new List<Note>();
     private readonly List<Note> dragBatchScratch = new List<Note>();
+    private readonly List<Note> chainTimingExtraDragCandidates = new List<Note>();
+    private readonly List<HoldNote> pausedChainTimingHolds = new List<HoldNote>();
     /// <summary>
     /// Drag notes recorded (armed) by each finger's swipe contact -- recordings made while
     /// the finger was still at its press point never bind (see
@@ -110,6 +112,7 @@ public class InputController : MonoBehaviour
     {
         game.onGameUpdate.AddListener(OnGameUpdate);
         game.onGamePaused.AddListener(OnGamePaused);
+        game.onGameUnpaused.AddListener(OnGameUnpaused);
         game.onGameStarted.AddListener(OnGameStarted);
         game.onNoteJudged.AddListener(CaptureClearedDropDrag);
     }
@@ -131,6 +134,7 @@ public class InputController : MonoBehaviour
         GameTouchInput.FingerUpdate -= OnFingerUpdate;
         GameTouchInput.FingerUp -= OnFingerUp;
         ResetBindingsWithoutJudgment();
+        pausedChainTimingHolds.Clear();
     }
 
     private void OnDestroy()
@@ -141,6 +145,7 @@ public class InputController : MonoBehaviour
         if (game == null) return;
         game.onGameUpdate.RemoveListener(OnGameUpdate);
         game.onGamePaused.RemoveListener(OnGamePaused);
+        game.onGameUnpaused.RemoveListener(OnGameUnpaused);
         game.onGameStarted.RemoveListener(OnGameStarted);
         game.onNoteJudged.RemoveListener(CaptureClearedDropDrag);
     }
@@ -239,7 +244,30 @@ public class InputController : MonoBehaviour
 
     public void OnGamePaused(Game game)
     {
+        foreach (var note in HoldingNotes.Values)
+        {
+            if (!note.UsesChainTimingJudgment || !note.IsHolding || pausedChainTimingHolds.Contains(note)) continue;
+            note.SuspendChainTimingHold();
+            pausedChainTimingHolds.Add(note);
+        }
         ResetBindingsWithoutJudgment();
+    }
+
+    private void OnGameUnpaused(Game _)
+    {
+        foreach (var note in pausedChainTimingHolds)
+        {
+            if (!IsTouchableNote(note)) continue;
+            foreach (var finger in GameTouchInput.ActiveFingers())
+            {
+                var position = finger.GetWorldPosition(game.camera.orthographic ? 0 : 10, game.camera);
+                if (HoldingNotes.ContainsKey(finger.Index) || !note.DoesCollide(position)) continue;
+                HoldingNotes.Add(finger.Index, note);
+                note.HoldingFingers.Add(finger.Index);
+            }
+            note.ResumeChainTimingHold();
+        }
+        pausedChainTimingHolds.Clear();
     }
 
     public void OnGameUpdate(Game game)
@@ -315,7 +343,7 @@ public class InputController : MonoBehaviour
                 // Collect all colliding eligible Drags without settling yet: Immediate vs Armed
                 // depends on whether a higher-priority Select candidate claims this fresh Down.
                 // Misses still settle immediately and do not arm DragCoHit.
-                var acceptedDrag = CollectCollidingDragBatch(pressedPosition);
+                var acceptedDrag = CollectCollidingDragBatch(pressedPosition, protectSelect: game.State.IsChainTimingPractice);
                 // Collider miss: collect occluding DropDrags first so every Select on this
                 // Down shares one DragCoHit representative (and one batch window).
                 if (acceptedDrag == null)
@@ -324,6 +352,7 @@ public class InputController : MonoBehaviour
                 // Filter Selects before either candidate settles. DropDrag uses the same
                 // spatial/time guard in every state; ordinary Drags retain DragCoHit.
                 acceptedSelect = FindAcceptedSelect(finger, pressedPosition, acceptedDrag);
+                AppendChainTimingExtraDrags(acceptedDrag, acceptedSelect);
 
                 // A press onto an in-flight (already recorded) chain continues the recording:
                 // the series' first note is armed, so this Down must not settle the next one early.
@@ -352,80 +381,83 @@ public class InputController : MonoBehaviour
     /// still clear immediately; scanning after the representative does not Miss-clear
     /// (legacy returned on first hit).
     /// </summary>
-    private Note CollectCollidingDragBatch(Vector2 worldPos)
+    private Note CollectCollidingDragBatch(Vector2 worldPos, bool protectSelect = false)
     {
         dragBatchScratch.Clear();
+        chainTimingExtraDragCandidates.Clear();
         Note accepted = null;
         var acceptedTime = 0f;
         foreach (var note in TouchableDragNotes)
         {
-            if (!IsTouchableNote(note)) continue;
-            if (!note.DoesCollide(worldPos)) continue;
-            if (!note.CanHandleTouch()) continue;
+            if (!IsTouchableNote(note) || !note.DoesCollide(worldPos) || !note.CanHandleTouch()) continue;
 
             // Expand co-located stack members that share this host's collider.
             if (note.DragStack != null && note.DragStack.IsPrimary(note))
             {
-                ExpandDragStackIntoBatch(note.DragStack, ref accepted, ref acceptedTime);
+                foreach (var member in note.DragStack.Members)
+                {
+                    if (!IsTouchableNote(member) || !member.CanHandleTouch()) continue;
+                    QueueDragCandidate(member, protectSelect, ref accepted, ref acceptedTime);
+                }
                 continue;
             }
 
-            var grade = note.GetTouchGrade();
-            if (grade == NoteGrade.None) continue;
-            if (grade == NoteGrade.Miss)
-            {
-                // Legacy FindAcceptedDrag cleared Misses only until the first valid hit.
-                if (accepted == null) note.Clear(NoteGrade.Miss);
-                continue;
-            }
-
-            if (accepted == null)
-            {
-                accepted = note;
-                acceptedTime = EffectiveNoteTime(note);
-                dragBatchScratch.Add(note);
-                continue;
-            }
-
-            if (Math.Abs(EffectiveNoteTime(note) - acceptedTime) > DragStackBatchGapSeconds)
-                continue;
-
-            dragBatchScratch.Add(note);
+            QueueDragCandidate(note, protectSelect, ref accepted, ref acceptedTime);
         }
-
         return accepted;
     }
 
-    private void ExpandDragStackIntoBatch(DragStackHost host, ref Note accepted, ref float acceptedTime)
+    private void QueueDragCandidate(Note note, bool protectSelect, ref Note accepted, ref float acceptedTime)
     {
-        for (var i = 0; i < host.Members.Count; i++)
+        var grade = note.GetTouchGrade();
+        if (grade == NoteGrade.None) return;
+        if (grade == NoteGrade.Miss)
         {
-            var note = host.Members[i];
-            if (!IsTouchableNote(note)) continue;
-            if (!note.CanHandleTouch()) continue;
+            // Legacy FindAcceptedDrag cleared Misses only until the first valid hit.
+            if (accepted == null) note.Clear(NoteGrade.Miss);
+            return;
+        }
 
-            var grade = note.GetTouchGrade();
-            if (grade == NoteGrade.None) continue;
-            if (grade == NoteGrade.Miss)
+        // Wider Chain Timing contacts must not become the Select guard or replace DropDrag fallback.
+        if (protectSelect && note.UsesChainTimingDrag && !note.CanRepresentNativeDrag())
+        {
+            chainTimingExtraDragCandidates.Add(note);
+            return;
+        }
+
+        var time = EffectiveNoteTime(note);
+        if (accepted == null)
+        {
+            accepted = note;
+            acceptedTime = time;
+        }
+
+        if (Math.Abs(time - acceptedTime) > DragStackBatchGapSeconds) return;
+        if (!dragBatchScratch.Contains(note)) dragBatchScratch.Add(note);
+    }
+
+    private void AppendChainTimingExtraDrags(Note acceptedDrag, Note acceptedSelect)
+    {
+        if (chainTimingExtraDragCandidates.Count == 0) return;
+        var reference = acceptedDrag != null ? acceptedDrag : acceptedSelect;
+        var referenceTime = reference == null ? 0 :
+            ChainTimingJudgment.ToMicroseconds((double)reference.Model.start_time + reference.JudgmentOffset);
+        var window = acceptedDrag != null
+            ? ChainTimingJudgment.ToMicroseconds(DragStackBatchGapSeconds)
+            : ChainTimingJudgment.ToMicroseconds(DragCoHitWindowSeconds);
+
+        foreach (var note in chainTimingExtraDragCandidates)
+        {
+            if (reference == null)
             {
-                if (accepted == null) note.Clear(NoteGrade.Miss);
-                continue;
+                reference = note;
+                referenceTime = note.ChainTimingStart;
+                window = ChainTimingJudgment.ToMicroseconds(DragStackBatchGapSeconds);
             }
-
-            if (accepted == null)
-            {
-                accepted = note;
-                acceptedTime = EffectiveNoteTime(note);
-                dragBatchScratch.Add(note);
-                continue;
-            }
-
-            if (Math.Abs(EffectiveNoteTime(note) - acceptedTime) > DragStackBatchGapSeconds)
-                continue;
-
-            if (!dragBatchScratch.Contains(note))
+            if (Math.Abs(note.ChainTimingStart - referenceTime) <= window && !dragBatchScratch.Contains(note))
                 dragBatchScratch.Add(note);
         }
+        chainTimingExtraDragCandidates.Clear();
     }
 
     /// <summary>
@@ -445,6 +477,7 @@ public class InputController : MonoBehaviour
     /// press point (<paramref name="bindRecordings"/>; Down-path recordings never bind)
     /// bind for release settlement. Stationary-contact recordings and DropDrag (always)
     /// resolve exclusively at their own trigger points.
+    /// Chain Timing drags settle at contact within the same effect budget.
     /// Multi-note batches that arm mark <see cref="Note.MarkDragStackBudget"/> with one
     /// shared stack id so later co-clears share caps via
     /// <see cref="EffectController.EnterDragStackClear"/> without affecting
@@ -465,7 +498,7 @@ public class InputController : MonoBehaviour
             if (!IsTouchableNote(note)) continue;
             var dropDragEarlyPress = note.Type == NoteType.DropDrag &&
                                      game.Time < EffectiveNoteTime(note) - PressSettleEarlyWindowSeconds;
-            if (deferred || i > 0 || dropDragEarlyPress)
+            if (!note.UsesChainTimingDrag && (deferred || i > 0 || dropDragEarlyPress))
             {
                 note.OnTouchDeferred(screenPos);
                 if (note.IsArmed)
@@ -473,7 +506,8 @@ public class InputController : MonoBehaviour
                     // Drop drags never release-settle; and only swipe recordings bind --
                     // a stationary tap overlapping a neighbour's hitbox records it for its
                     // own trigger point instead of popping it at the tap's lift.
-                    if (bindRecordings && note.Type != NoteType.DropDrag) BindArmedDrag(fingerIndex, note);
+                    if (bindRecordings && note.Type != NoteType.DropDrag)
+                        BindArmedDrag(fingerIndex, note);
                     if (budgetStack) note.MarkDragStackBudget(stackBudgetId);
                     game.PlayRecordRecorder?.RecordArm(fingerIndex, note, inputSequence);
                 }
@@ -578,13 +612,14 @@ public class InputController : MonoBehaviour
             if (note is HoldNote holdNote)
             {
                 // Lists are per-frame snapshots; same-frame multi-finger rebind uses Update.
-                if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index)) continue;
+                if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index) || !holdNote.CanBindFinger) continue;
                 if (!IsEligibleSelectAfterDrag(holdNote, acceptedDrag, pressedPosition)) continue;
                 hitCandidates.Add(holdNote);
                 continue;
             }
 
             if (!IsEligibleSelectAfterDrag(note, acceptedDrag, pressedPosition)) continue;
+            if (note.UsesChainTimingJudgment && note.GetTouchGrade() == NoteGrade.None) continue;
             hitCandidates.Add(note);
         }
 
@@ -619,7 +654,7 @@ public class InputController : MonoBehaviour
                     game.Time, game.Chart.CurrentPageId)) return false;
         }
 
-        if (note.Model.page_index > game.Chart.CurrentPageId &&
+        if (!note.UsesChainTimingJudgment && note.Model.page_index > game.Chart.CurrentPageId &&
             note.Model.start_time - game.Time >
             game.Chart.Model.page_list[game.Chart.CurrentPageId].Duration * 0.5f)
         {
@@ -691,11 +726,9 @@ public class InputController : MonoBehaviour
         }
 
         if (note is HoldNote holdNote)
-        {
-            if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index)) return false;
-        }
+            return !holdNote.IsHolding && !HoldingNotes.ContainsKey(finger.Index) && holdNote.CanBindFinger;
 
-        return true;
+        return !note.UsesChainTimingJudgment || note.GetTouchGrade() != NoteGrade.None;
     }
 
     /// <summary>
@@ -728,7 +761,7 @@ public class InputController : MonoBehaviour
 
             if (note is HoldNote holdNote)
             {
-                if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index)) continue;
+                if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index) || !holdNote.CanBindFinger) continue;
                 accepted = holdNote;
                 break;
             }
@@ -759,7 +792,7 @@ public class InputController : MonoBehaviour
 
         if (note is HoldNote holdNote)
         {
-            if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index)) return false;
+            if (holdNote.IsHolding || HoldingNotes.ContainsKey(finger.Index) || !holdNote.CanBindFinger) return false;
             HoldingNotes.Add(finger.Index, holdNote);
             holdNote.UpdateFinger(finger.Index, true);
             return true;
@@ -823,7 +856,7 @@ public class InputController : MonoBehaviour
                 {
                     if (!IsTouchableNote(note)) continue;
                     if (!game.IsLoaded || !game.State.IsPlaying) break;
-                    if (!note.DoesCollide(pos)) continue;
+                    if (!note.CanBindFinger || !note.DoesCollide(pos)) continue;
                     HoldingNotes.Add(finger.Index, note);
                     note.UpdateFinger(finger.Index, true);
                     switchedToNewNote = true;
@@ -836,7 +869,7 @@ public class InputController : MonoBehaviour
                     foreach (var holdNote in HoldingNotes.Values)
                     {
                         if (!IsTouchableNote(holdNote)) continue;
-                        if (!holdNote.DoesCollide(pos)) continue;
+                        if (!holdNote.CanBindFinger || !holdNote.DoesCollide(pos)) continue;
                         HoldingNotes.Add(finger.Index, holdNote);
                         holdNote.UpdateFinger(finger.Index, true);
                         break;
